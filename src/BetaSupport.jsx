@@ -35,12 +35,12 @@ export default function BetaSupport({userId,isAdmin=false,adminView=false}){
     const invalid=validateFeedback(draft);
     if(invalid){setError(invalid);return;}
     setSubmitting(true);setError('');setMessage('');
-    const {error:e}=await supabase.from('beta_feedback').insert({
+    const {error:insertError}=await supabase.from('beta_feedback').insert({
       user_id:userId,category:draft.category,screen:draft.screen,
       title:draft.title.trim(),details:draft.details.trim(),priority:draft.priority
     });
     setSubmitting(false);
-    if(e){setError('No se pudo enviar. Es posible que hayas alcanzado el límite de 5 comentarios por hora. '+safeError(e));return;}
+    if(insertError){setError('No se pudo enviar. Es posible que hayas alcanzado el límite de 5 comentarios por hora. '+safeError(insertError));return;}
     setDraft(initial);setMessage('Gracias. El equipo de OVIO ha recibido tu comentario.');await load();
   }
   async function save(item){
