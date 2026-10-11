@@ -256,3 +256,29 @@ label{display:flex;flex-direction:column;gap:8px;font-size:12px;color:#cecede;fo
 .beta-status{border-radius:999px;padding:4px 10px;background:#41375c;color:#e9dbff;font-size:11px;white-space:nowrap}
 .beta-status-resolved{background:#1e4e43;color:#ceffeb}.beta-status-dismissed{background:#343342;color:#d8d6e1}.beta-status-reviewing{background:#604324;color:#ffe0ad}
 @media(max-width:700px){.beta-feedback-grid{grid-template-columns:1fr}.beta-feedback-form,.beta-feedback-history{padding:17px}.beta-feedback-history-head{align-items:flex-start;flex-direction:column}.beta-feedback-filter select{min-width:130px}}
+
+/* OVIO v1.5 — piloto privado y primeros pasos */
+.pilot-page{max-width:1150px;margin:0 auto 55px}.pilot-page>.section-heading{align-items:center}
+.pilot-page .page-header h1{font-size:clamp(30px,4vw,47px)}
+.pilot-intro{padding:23px 25px!important;margin:20px 0 16px;display:grid;gap:13px;background:radial-gradient(circle at 93% 12%,#6739a24a,transparent 51%),#1a1b2b}
+.pilot-intro h2{margin:9px 0;color:#fff;font-size:25px}.pilot-intro p{font-size:13px;color:#b9b5cb;max-width:680px}
+.pilot-progress-track{height:9px;overflow:hidden;border-radius:99px;background:#343044;width:100%}
+.pilot-progress-track span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#9468fa,#3dd7eb);transition:width .2s ease}
+.pilot-steps{display:grid;gap:12px}.pilot-step{padding:18px 20px!important;display:flex;align-items:center;gap:17px}
+.pilot-step-number{border:1px solid #7f73b8;background:#2c2443;width:41px;height:41px;display:grid;place-items:center;border-radius:13px;font-weight:800;flex-shrink:0;color:#dfd0ff}
+.pilot-step-number.done{border-color:#3bd7b9;color:#6eead1;background:#143d3e}.pilot-step-copy{flex:1;min-width:0}
+.pilot-step-copy h3,.pilot-help h3{margin:0 0 7px;color:#fff;font-size:16px}.pilot-step-copy p,.pilot-help p{margin:0 0 6px;color:#c1bdcc;font-size:12px;line-height:1.6}.pilot-step-copy small{font-size:11px;color:#b8a7df}
+.pilot-help{display:flex;align-items:center;gap:17px;padding:22px!important;margin-top:19px;background:linear-gradient(115deg,#282044,#181c2d)!important}
+.pilot-help svg{color:#a58dff;flex-shrink:0}.pilot-help>div{flex:1}.pilot-help .button{flex-shrink:0}
+.pilot-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin:23px 0}
+.pilot-metric{padding:20px!important;display:flex;flex-direction:column;gap:17px;min-width:0;background:linear-gradient(135deg,#26213a,#181a2a)!important}
+.pilot-metric>div{display:flex;align-items:center;gap:10px;color:#c1b6dc;font-size:12px;font-weight:600}.pilot-metric svg{color:#a78bfa;flex-shrink:0}
+.pilot-metric strong{font-size:clamp(24px,3vw,38px);line-height:1;color:#fff;font-variant-numeric:tabular-nums}
+.pilot-secondary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.pilot-summary{padding:23px!important}
+.pilot-summary h2{font-size:30px;margin:13px 0;color:white}.pilot-summary p{font-size:12px;color:#b9b5ce;line-height:1.65;margin:16px 0 5px}
+.pilot-summary-stats{display:flex;gap:9px;flex-wrap:wrap}.pilot-summary-stats span{padding:9px 11px;border-radius:10px;background:#292440;color:#d6c8f4;font-size:11px}
+.pilot-noaccess,.pilot-loading{padding:25px!important}.pilot-noaccess h2{margin:15px 0 5px}
+.pilot-home-nudge{display:flex;align-items:center;gap:13px;border:1px solid #7267a55c;background:linear-gradient(100deg,#221c36,#191b29);border-radius:12px;padding:13px 16px;margin:0 0 22px;font-size:12px;color:#d1c5ea}
+.pilot-home-nudge svg{color:#aa8bff;flex-shrink:0}.pilot-home-nudge span{flex:1}
+@media(max-width:1000px){.pilot-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.pilot-steps .pilot-step{align-items:flex-start;flex-wrap:wrap}.pilot-step .button{margin-left:57px}.pilot-help{flex-direction:column;align-items:flex-start}.pilot-secondary-grid{grid-template-columns:1fr}.pilot-metrics{gap:9px}.pilot-metric{padding:13px!important}.pilot-metric strong{font-size:27px}.pilot-page{margin-bottom:115px}}

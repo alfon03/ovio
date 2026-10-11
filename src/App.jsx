@@ -4,7 +4,7 @@ import {
   Settings, LogOut, Heart, Play, Pause, SkipBack, SkipForward, Volume2,
   Plus, Music2, Disc3, UploadCloud, ShieldCheck, Radio, Link2,
   X, Check, Clock3, ArrowLeft, BadgeCheck, Flag, Sparkles, LockKeyhole, Bell, BellRing,
-  Globe2, Menu, Trash2, AlertCircle, Eye, Headphones, RefreshCcw, Share2, ImagePlus, Bookmark, Send, Newspaper, Trophy, CalendarDays, TrendingUp, Shuffle, Repeat, Repeat1, ListPlus, ListOrdered, ChevronUp, ChevronDown, MessageSquare
+  Globe2, Menu, Trash2, AlertCircle, Eye, Headphones, RefreshCcw, Share2, ImagePlus, Bookmark, Send, Newspaper, Trophy, CalendarDays, TrendingUp, Shuffle, Repeat, Repeat1, ListPlus, ListOrdered, ChevronUp, ChevronDown, MessageSquare, ClipboardCheck, ArrowRight
 } from 'lucide-react';
 import { supabase, configured, assetUrl, safeError } from './supabase';
 import { recommendTracks, latestFromFollowed } from './discovery';
@@ -12,6 +12,7 @@ import { buildPersonalizedMixes, recommendAlbums } from './mixes';
 import { listenedDelta } from './analytics';
 import ArtistInsights from './ArtistInsights';
 import BetaSupport from './BetaSupport';
+import BetaPilotDashboard, {BetaWelcome} from './BetaPilot';
 import {createQueue, nextPosition, toggleShuffle, cycleRepeat, enqueueNext, removeUpcoming, moveUpcoming, resumePosition} from './player-queue';
 import { normalizeUsername, validateUsername, normalizeArtistName, validateArtistName, validateEmail } from './identity';
 import { passwordIssue, isRecoveryRoute, recoveryRedirectUrl } from './auth-security';
@@ -211,6 +212,7 @@ const navs = [
   ['home','Inicio',Home],['search','Buscar',Search],['explore','Descubrir',Compass],
   ['library','Tu biblioteca',Library],['community','Comunidad',Users],
   ['charts','Top OVIO',Trophy],['recap','Mi año en OVIO',CalendarDays],
+  ['pilot-start','Primeros pasos',ClipboardCheck],
   ['feedback','Ayuda y sugerencias',MessageSquare]
 ];
 function SectionHeading({title,detail='',button}) {return <div className="section-heading"><div><h2>{title}</h2>{detail&&<p className="subtext">{detail}</p>}</div>{button}</div>}
@@ -488,6 +490,10 @@ export default function App(){
   const myProfile=database.profiles.find(p=>p.id===uid) || {display_name:'Oyente'};
   const myApplication=database.artists.find(a=>a.user_id===uid);
   const approvedArtist=myApplication?.status==='approved';
+  const pilotCompleted=Boolean(myProfile.username && !/^u_[0-9a-f-]{32,}$/i.test(myProfile.username)
+    && database.likes.some(item=>item.user_id===uid)
+    && database.playlists.some(item=>item.owner_id===uid)
+    && database.follows.some(item=>item.user_id===uid));
   const publicTracks=database.tracks.filter(t=>t.status==='approved');
   const artistName=(id)=>database.artists.find(a=>a.user_id===id&&a.status==='approved')?.artist_name||database.profiles.find(p=>p.id===id)?.display_name||'Artista';
   const profileFor=(id)=>database.profiles.find(p=>p.id===id) || {display_name:artistName(id)};
@@ -896,12 +902,15 @@ export default function App(){
   if(!session)return <Auth key={authFeedback||'login'} notify={notify} initialMessage={authFeedback}/>;
 
   let body=null;
-  if(page==='feedback')body=<BetaSupport userId={session.user.id} isAdmin={isAdmin}/>;
+  if(page==='pilot-start')body=<BetaWelcome username={myProfile.username||''} favoriteCount={database.likes.filter(item=>item.user_id===uid).length} playlistCount={database.playlists.filter(item=>item.owner_id===uid).length} followCount={database.follows.filter(item=>item.user_id===uid).length} onNavigate={nav}/>;
+  else if(page==='pilot-admin')body=<BetaPilotDashboard isAdmin={isAdmin} onNavigate={nav}/>;
+  else if(page==='feedback')body=<BetaSupport userId={session.user.id} isAdmin={isAdmin}/>;
   else if(page==='feedback-admin')body=<BetaSupport userId={session.user.id} isAdmin={isAdmin} adminView/>;
   else if(page==='home'){
     const recentIds=[...database.listens].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).map(l=>l.track_id);
     const recent=[...new Set(recentIds)].map(id=>publicTracks.find(t=>t.id===id)).filter(Boolean).slice(0,5);
     body=<><div className="hero"><span className="eyebrow">BIENVENIDO A OVIO</span><h1>Descubre lo<br/><span className="grad-text">que viene.</span></h1><p>Una comunidad donde las próximas canciones que amarás todavía están por descubrir.</p><button className="button primary" onClick={()=>nav('explore')}>Explorar música <Compass size={17}/></button><div className="hero-glyph"><Logo small/></div></div>
+      {!pilotCompleted&&<div className="pilot-home-nudge"><ClipboardCheck size={18}/><span>¿Es tu primera vez en OVIO? Completa los pasos de la beta.</span><button className="button tiny secondary" onClick={()=>nav('pilot-start')}>Empezar <ArrowRight size={14}/></button></div>}
       <SectionHeading title="Tus mixes OVIO" detail="Selecciones dinámicas según tus favoritos, escuchas y artistas seguidos; puedes guardarlas como playlists privadas."/>
       {personalizedMixes.length?mixTiles(personalizedMixes):<p className="empty-inline">Tus mixes aparecerán cuando haya canciones aprobadas en OVIO.</p>}
       <SectionHeading title="Hecho para ti" detail="Las recomendaciones se adaptan a tus favoritos y tus escuchas." button={<button className="small-link" onClick={()=>nav('explore')}>Ver más</button>}/>
@@ -1070,8 +1079,8 @@ export default function App(){
     </>:<Blank icon={LockKeyhole} title="No tienes permiso de administrador" description="Este panel requiere autorización en la base de datos."/>;
   }
   return <div className="app-shell">
-    <aside className={'sidebar '+(mobileMenu?'open':'')}><div className="sidebar-top"><Logo/><button className="icon-button mobile-close" onClick={()=>setMobileMenu(false)}><X/></button></div><div className="sidebar-label">EXPLORAR</div><nav aria-label="Menú principal">{navs.map(([id,label,Icon])=><button key={id} className={'side-link '+(page===id?'active':'')} onClick={()=>nav(id)}><Icon size={19}/>{label}</button>)}</nav><div className="sidebar-label">CREADORES</div><nav><button className={'side-link '+(page==='studio'?'active':'')} onClick={()=>nav('studio')}><AudioLines size={19}/> OVIO Studio</button>{approvedArtist&&<button className={'side-link '+(page==='insights'?'active':'')} onClick={()=>nav('insights')}><TrendingUp size={19}/> Mis estadísticas</button>}<button className={'side-link '+(page==='notifications'?'active':'')} onClick={()=>nav('notifications')}><Bell size={19}/> Notificaciones {unreadCount>0&&<span className="side-counter">{unreadCount>99?'99+':unreadCount}</span>}</button>{isAdmin&&<button className={'side-link '+(page==='admin'?'active':'')} onClick={()=>nav('admin')}><ShieldCheck size={19}/> Moderación</button>}{isAdmin&&<button className={'side-link '+(page==='feedback-admin'?'active':'')} onClick={()=>nav('feedback-admin')}><MessageSquare size={19}/> Comentarios beta</button>}</nav><div className="sidebar-bottom"><div className="sidebar-promo"><Disc3 color="#a993ff"/><b>Tu próxima canción favorita está aquí.</b><p>Descubre nuevos talentos.</p><button className="button tiny secondary" onClick={()=>nav('explore')}>Descubrir</button></div><span className="sidebar-legal">Beta gratuita · Música revisada</span></div></aside>
-    <div className="main-column"><header className="topbar"><div className="row"><button className="icon-button mobile-menu" onClick={()=>setMobileMenu(v=>!v)} aria-label="Abrir menú"><Menu/></button><span className="top-greeting">La música se descubre juntos.</span></div><div className="row"><span className="beta-label">OVIO BETA · 1.4</span><button className="notification-bell" aria-label={`Notificaciones: ${unreadCount} sin leer`} title="Notificaciones" onClick={()=>nav('notifications')}>{unreadCount?<BellRing size={19}/>:<Bell size={19}/>} {unreadCount>0&&<span className="bell-count">{unreadCount>99?'99+':unreadCount}</span>}</button><button className="account-button" onClick={()=>nav('profile')}><Avatar profile={myProfile}/><span>{myProfile.display_name}</span><Settings size={16}/></button></div></header>
+    <aside className={'sidebar '+(mobileMenu?'open':'')}><div className="sidebar-top"><Logo/><button className="icon-button mobile-close" onClick={()=>setMobileMenu(false)}><X/></button></div><div className="sidebar-label">EXPLORAR</div><nav aria-label="Menú principal">{navs.map(([id,label,Icon])=><button key={id} className={'side-link '+(page===id?'active':'')} onClick={()=>nav(id)}><Icon size={19}/>{label}</button>)}</nav><div className="sidebar-label">CREADORES</div><nav><button className={'side-link '+(page==='studio'?'active':'')} onClick={()=>nav('studio')}><AudioLines size={19}/> OVIO Studio</button>{approvedArtist&&<button className={'side-link '+(page==='insights'?'active':'')} onClick={()=>nav('insights')}><TrendingUp size={19}/> Mis estadísticas</button>}<button className={'side-link '+(page==='notifications'?'active':'')} onClick={()=>nav('notifications')}><Bell size={19}/> Notificaciones {unreadCount>0&&<span className="side-counter">{unreadCount>99?'99+':unreadCount}</span>}</button>{isAdmin&&<button className={'side-link '+(page==='admin'?'active':'')} onClick={()=>nav('admin')}><ShieldCheck size={19}/> Moderación</button>}{isAdmin&&<button className={'side-link '+(page==='feedback-admin'?'active':'')} onClick={()=>nav('feedback-admin')}><MessageSquare size={19}/> Comentarios beta</button>}{isAdmin&&<button className={'side-link '+(page==='pilot-admin'?'active':'')} onClick={()=>nav('pilot-admin')}><ClipboardCheck size={19}/> Panel del piloto</button>}</nav><div className="sidebar-bottom"><div className="sidebar-promo"><Disc3 color="#a993ff"/><b>Tu próxima canción favorita está aquí.</b><p>Descubre nuevos talentos.</p><button className="button tiny secondary" onClick={()=>nav('explore')}>Descubrir</button></div><span className="sidebar-legal">Beta gratuita · Música revisada</span></div></aside>
+    <div className="main-column"><header className="topbar"><div className="row"><button className="icon-button mobile-menu" onClick={()=>setMobileMenu(v=>!v)} aria-label="Abrir menú"><Menu/></button><span className="top-greeting">La música se descubre juntos.</span></div><div className="row"><span className="beta-label">OVIO BETA · 1.5</span><button className="notification-bell" aria-label={`Notificaciones: ${unreadCount} sin leer`} title="Notificaciones" onClick={()=>nav('notifications')}>{unreadCount?<BellRing size={19}/>:<Bell size={19}/>} {unreadCount>0&&<span className="bell-count">{unreadCount>99?'99+':unreadCount}</span>}</button><button className="account-button" onClick={()=>nav('profile')}><Avatar profile={myProfile}/><span>{myProfile.display_name}</span><Settings size={16}/></button></div></header>
       <main className="main-content">{loading&&<div className="sync-note"><RefreshCcw size={14}/> Actualizando contenido...</div>}{body}</main>
     </div>
     <div className={'player '+(!current?'no-song':'')}><div className="now-playing">{current?<><button className="player-cover-button" aria-label="Abrir reproductor completo" onClick={()=>setModal({type:'player'})}><Cover compact title={current.title} n={1} coverPath={coverForTrack(current)}/></button><div><b>{current.title}</b><button onClick={()=>nav('artist',current.artist_id)}>{artistName(current.artist_id)}</button></div><button aria-label="Favorito" className={'icon-button '+(liked(current.id)?'on':'')} onClick={()=>toggleLike(current.id)}><Heart size={17} fill={liked(current.id)?'currentColor':'none'}/></button></>:<><span className="player-placeholder"><Music2 size={18}/></span><div><b>Nada reproduciéndose</b><small>Elige una canción</small></div></>}</div>

@@ -1,12 +1,14 @@
-# OVIO Beta v1.4 · Piloto con feedback
+# OVIO Beta v1.5 · Piloto privado
 
-Proyecto React + Supabase + Vercel. **No crear otra base de datos**.
+Actualización incremental para tu proyecto React + Supabase + Vercel (sin crear una nueva base de datos).
 
-Para actualizar desde v1.3, empieza por **[INSTALAR-V14.md](INSTALAR-V14.md)**.
+## Novedades
 
-- SQL nuevo: `sql/011_feedback_beta.sql` (ejecútalo una sola vez tras las migraciones anteriores).
-- Nueva pantalla para oyentes **Ayuda y sugerencias** y bandeja **Comentarios beta** para administradores.
-- Privacidad protegida por políticas RLS de Supabase y límite de cinco mensajes/hora.
-- Para pruebas de aceptación utiliza `PRUEBAS-V14.md`.
+- **Primeros pasos**, un recorrido que utiliza información real de la cuenta (usuario, favoritos, playlists, artistas seguidos).
+- **Panel del piloto**, resumen privado para administradores con cuentas, solicitudes, canciones, incidencias y estadísticas agregadas consentidas.
+- Migración única `sql/012_panel_piloto.sql`, con comprobación de autorización administrativa dentro de la función PostgreSQL.
+- Registro y permisos existentes **sin cambios**; la beta no se abre automáticamente al público.
 
-**Aún no está probada con tu Supabase real y no equivale a una beta legalmente lista para el público**.
+**Empieza por [INSTALAR-V15.md](INSTALAR-V15.md)**, continúa con [PRUEBAS-V15.md](PRUEBAS-V15.md).
+
+Pruebas unitarias en este entorno: **60 correctas**. Sintaxis JSX validada. Compilación final con Vite y pruebas en tu Supabase pendientes; `npm install` no pudo acceder a npmjs.org desde este entorno.
