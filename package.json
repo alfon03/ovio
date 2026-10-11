@@ -1,6 +1,6 @@
 {
   "name": "ovio-beta",
-  "version": "1.9.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/*.test.js",
-    "check:deploy": "node scripts/check-deploy.mjs"
+    "check:deploy": "node scripts/check-deploy.mjs",
+    "check:beta": "node scripts/check-public-beta.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.58.0",

@@ -1,0 +1,30 @@
+#!/usr/bin/env node
+// Auditoría local: no accede a Supabase ni revela secretos.
+import {readFileSync,existsSync} from 'node:fs';
+import process from 'node:process';
+const from=file=>readFileSync(new URL(file,import.meta.url),'utf8');
+const failures=[];
+const notices=[];
+const check=(ok,problem)=>{if(!ok)failures.push(problem);};
+const config=JSON.parse(from('../vercel.json'));
+const app=from('../src/App.jsx');
+const chall=from('../src/TurnstileChallenge.jsx');
+const profile=from('../src/AccountPasswordRequest.jsx');
+const sql=from('../sql/013_lyrics_private.sql');
+const envExample=from('../.env.example');
+check(config.headers?.some(h=>h.headers?.some(v=>v.key==='X-Content-Type-Options'&&v.value==='nosniff')),'Falta cabecera nosniff.');
+check(config.headers?.some(h=>h.headers?.some(v=>v.key==='X-Frame-Options'&&v.value==='DENY')),'Falta protección de marcos.');
+check(/captchaToken/.test(app)&&/signInWithPassword/.test(app)&&/resetPasswordForEmail/.test(app),'CAPTCHA debe cubrir registro, inicio y recuperación.');
+check(/captchaToken/.test(profile),'El cambio de contraseña debe incluir CAPTCHA cuando esté habilitado.');
+check(/(?:turnstile|api)\.render/.test(chall)&&/turnstile\.reset/.test(chall),'Falta ciclo de vida del desafío anti-bots.');
+check(/force row level security/i.test(sql)&&/owner_id=\(select auth\.uid\(\)\)/.test(sql),'Falta RLS de propietario de letras.');
+check(existsSync(new URL('../sql/014_auditoria_beta_publica_SOLO_LECTURA.sql',import.meta.url)),'Falta consulta SQL de auditoría.');
+check(/VITE_TURNSTILE_SITE_KEY/.test(envExample),'Falta referencia de site key opcional.');
+const turnstileSet=Boolean(process.env.VITE_TURNSTILE_SITE_KEY?.trim());
+if(!turnstileSet)notices.push('Turnstile no está configurado en este proceso; es opcional y debe habilitarse de forma coordinada con Supabase.');
+if(process.env.VITE_TURNSTILE_SECRET_KEY||process.env.VITE_CLOUDFLARE_SECRET_KEY)failures.push('Se detectó una variable VITE_ con nombre de clave secreta de Turnstile; no la uses en el navegador.');
+for(const notice of notices)console.log('AVISO:',notice);
+for(const failure of failures)console.error('REVISAR:',failure);
+console.log(failures.length?'OVIO · Revisión beta pública: necesita correcciones.':'OVIO · Revisión beta pública local: OK.');
+console.log('Pendiente validar: RLS y Storage reales, límites de Auth/SMTP, acciones entre usuarios y acceso público.');
+process.exitCode=failures.length?1:0;

@@ -21,6 +21,8 @@ import BetaPilotDashboard, {BetaWelcome} from './BetaPilot';
 import {createQueue, nextPosition, toggleShuffle, cycleRepeat, enqueueNext, removeUpcoming, moveUpcoming, resumePosition} from './player-queue';
 import { normalizeUsername, validateUsername, normalizeArtistName, validateArtistName, validateEmail } from './identity';
 import { passwordIssue, isRecoveryRoute, recoveryRedirectUrl } from './auth-security';
+import TurnstileChallenge, {turnstileSiteKey} from './TurnstileChallenge';
+import AccountPasswordRequest from './AccountPasswordRequest';
 
 const genres = ['Todos', 'Rap', 'Trap', 'Reguetón', 'Pop', 'Indie', 'Electrónica', 'Rock', 'R&B', 'Otro'];
 const uuid = () => crypto.randomUUID();
@@ -117,7 +119,9 @@ function Auth({notify,initialMessage=''}){
   const [busy,setBusy] = useState(false);
   const [message,setMessage] = useState(initialMessage);
   const [username,setUsername] = useState('');
-  function changeMode(next){setMode(next);setMessage('');}
+  const [captchaToken,setCaptchaToken] = useState('');
+  const [captchaReset,setCaptchaReset] = useState(0);
+  function changeMode(next){setMode(next);setMessage('');setCaptchaToken('');setCaptchaReset(v=>v+1);}
   async function submit(e){
     e.preventDefault(); if(busy)return;
     setBusy(true);setMessage('');
@@ -125,10 +129,12 @@ function Auth({notify,initialMessage=''}){
     const email=String(fd.get('email')||'').trim();
     const emailError=validateEmail(email);
     if(emailError){setMessage(emailError);setBusy(false);return;}
+    if(turnstileSiteKey&&!captchaToken){setMessage('Completa la verificación anti-bots para continuar.');setBusy(false);return;}
     try{
       if(mode==='recover'){
         const {error}=await supabase.auth.resetPasswordForEmail(email,{
-          redirectTo:recoveryRedirectUrl(window.location.origin,window.location.pathname)
+          redirectTo:recoveryRedirectUrl(window.location.origin,window.location.pathname),
+          ...(turnstileSiteKey?{captchaToken}:{})
         });
         if(error){
           setMessage('No hemos podido procesar la solicitud en este momento. Espera unos minutos y vuelve a intentarlo.');
@@ -151,9 +157,10 @@ function Auth({notify,initialMessage=''}){
         if(!availability.data){setMessage('Este nombre de usuario ya está en uso. Prueba otro.');return;}
         res = await supabase.auth.signUp({email,password,options:{
           emailRedirectTo: window.location.origin + window.location.pathname,
-          data:{display_name:String(fd.get('name')||'').trim(),username:userName}
+          data:{display_name:String(fd.get('name')||'').trim(),username:userName},
+          ...(turnstileSiteKey?{captchaToken}:{})
         }});
-      } else res = await supabase.auth.signInWithPassword({email,password});
+      } else res = await supabase.auth.signInWithPassword({email,password,...(turnstileSiteKey?{options:{captchaToken}}:{})});
       if(res.error){
         setMessage(mode==='register'?'No se ha podido crear la cuenta. Comprueba los datos o intenta de nuevo.':safeError(res.error));
         notify('No se ha podido acceder.');
@@ -164,7 +171,7 @@ function Auth({notify,initialMessage=''}){
       }
     } catch {
       setMessage('No se pudo conectar con el servicio. Inténtalo de nuevo más tarde.');
-    } finally {setBusy(false);}
+    } finally {setBusy(false);if(turnstileSiteKey){setCaptchaToken('');setCaptchaReset(v=>v+1);}}
   }
   return <main className="auth-page"><div className="auth-left"><Logo/><div><span className="eyebrow">Una nueva escena musical</span><h1>Tu música.<br/><span className="grad-text">Tu gente.</span></h1><p>Descubre artistas antes que nadie, guarda tus canciones y construye tu propia comunidad musical.</p><div className="auth-decoration"><Logo small/></div></div><span className="small">Beta gratuita · Solo música original revisada</span></div>
   <div className="auth-right"><div className="auth-panel"><span className="pill">Tu cuenta de OVIO</span><h2>{mode==='register'?'Crea tu cuenta':mode==='recover'?'Recupera tu acceso':'Vuelve a tu música'}</h2><p>{mode==='register'?'Elige un nombre único y confirma tu correo para entrar.':mode==='recover'?'Te enviaremos un enlace para crear una nueva contraseña.':'Entra para escuchar, descubrir y crear listas.'}</p><form onSubmit={submit} className="stack">
@@ -173,7 +180,8 @@ function Auth({notify,initialMessage=''}){
     {mode!=='recover'&&<label>Contraseña<input required name="password" type="password" autoComplete={mode==='register'?'new-password':'current-password'} minLength={mode==='register'?12:1} placeholder={mode==='register'?'12 caracteres como mínimo':'Tu contraseña'}/></label>}
     {mode==='register'&&<p className="small auth-security-hint">Utiliza al menos 12 caracteres, con letras y algún número o símbolo.</p>}
     {message&&<p role="status" className="form-message">{message}</p>}
-    <button type="submit" className="button primary wide" disabled={busy}>{busy?'Un momento...':mode==='register'?'Crear mi cuenta':mode==='recover'?'Enviar enlace de recuperación':'Iniciar sesión'}</button>
+    {turnstileSiteKey&&<TurnstileChallenge key={mode} onToken={setCaptchaToken} resetSignal={captchaReset}/>}
+    <button type="submit" className="button primary wide" disabled={busy||(Boolean(turnstileSiteKey)&&!captchaToken)}>{busy?'Un momento...':mode==='register'?'Crear mi cuenta':mode==='recover'?'Enviar enlace de recuperación':'Iniciar sesión'}</button>
   </form>
   {mode==='login'&&<button type="button" className="text-button auth-recover-link" onClick={()=>changeMode('recover')}>¿Has olvidado tu contraseña?</button>}
   <button type="button" className="text-button" onClick={()=>changeMode(mode==='login'?'register':'login')}>{mode==='register'?'¿Ya tienes cuenta? Inicia sesión':mode==='recover'?'Volver al inicio de sesión':'¿No tienes cuenta? Regístrate gratis'}</button>
@@ -1170,7 +1178,7 @@ export default function App(){
       <div className="settings-layout"><section className="surface profile-settings"><div className="row"><Avatar profile={myProfile} size="xl"/><div><b className="profile-name">{myProfile.display_name}</b><p className="small">@{myProfile.username || 'sin-usuario'} · {session.user.email}</p><label className="button secondary upload-avatar"><UploadCloud size={17}/> Cambiar foto<input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e=>changeAvatar(e.target.files?.[0])}/></label></div></div>
         <form className="stack profile-form" onSubmit={e=>{e.preventDefault();updateProfile(new FormData(e.currentTarget))}}><AvailabilityField kind="username" name="username" value={profileUsername??(myProfile.username?.startsWith('u_')&&myProfile.username.length===34?'':myProfile.username??'')} onChange={setProfileUsername} excludeOwn={!(myProfile.username?.startsWith('u_')&&myProfile.username.length===34)&&normalizeUsername(profileUsername??myProfile.username)===myProfile.username} allowEmpty={Boolean(myProfile.username?.startsWith('u_')&&myProfile.username.length===34)}/><label>Nombre público<input name="display_name" defaultValue={myProfile.display_name} required maxLength={60}/></label><label>Ciudad<input name="city" defaultValue={myProfile.city} maxLength={80} placeholder="Por ejemplo, Madrid"/></label><label>Biografía<textarea name="bio" defaultValue={myProfile.bio} maxLength={500} placeholder="Cuéntanos algo sobre ti"/></label><button className="button primary">Guardar cambios</button></form>
       <div className="listening-settings"><h3>Instalar OVIO en tu dispositivo</h3><p className="small">Puedes añadir OVIO a tu pantalla de inicio como una aplicación. Seguirás necesitando internet para escuchar música y guardar letras privadas.</p>{installPrompt&&<button type="button" className="button primary" onClick={installOvio}><Download size={16}/> Instalar OVIO</button>}<p className="small">En iPhone o iPad: abre OVIO en Safari, toca Compartir y elige «Añadir a pantalla de inicio». En otros navegadores, busca «Instalar aplicación» en el menú.</p></div>
-      <div className="listening-settings"><h3>Seguridad de la cuenta</h3><p className="small">¿Necesitas cambiar la contraseña? Te enviaremos un enlace a tu correo verificado. No la modificaremos sin ese enlace.</p><button className="button secondary" type="button" onClick={async()=>{const {error}=await supabase.auth.resetPasswordForEmail(session.user.email,{redirectTo:recoveryRedirectUrl(window.location.origin,window.location.pathname)});notify(error?'No se pudo enviar el enlace. Inténtalo más tarde.':'Si el envío está disponible, recibirás instrucciones en tu correo.');}}><LockKeyhole size={16}/> Enviar enlace para cambiar contraseña</button></div>
+      <AccountPasswordRequest email={session.user.email} notify={notify}/>
       <div className="listening-settings"><h3>Privacidad y estadísticas</h3><p className="small">Participa voluntariamente en rankings y genera tu resumen anual. Si lo desactivas, borraremos tu historial nuevo. El país nunca aparece en tu perfil.</p><form className="stack" onSubmit={e=>{e.preventDefault();saveListeningSettings(new FormData(e.currentTarget))}}><label>País para rankings<select name="country_code" value={draftAnalyticsSettings.country_code} onChange={e=>setDraftAnalyticsSettings(s=>({...s,country_code:e.target.value}))}><option value="ZZ">No indicar país</option><option value="ES">España</option><option value="OT">Otro país</option></select></label><label className="check-label"><input type="checkbox" name="analytics_enabled" value="yes" checked={draftAnalyticsSettings.analytics_enabled} onChange={e=>setDraftAnalyticsSettings(s=>({...s,analytics_enabled:e.target.checked}))}/>Permitir el registro de tiempo escuchado para rankings y mi resumen anual.</label><button className="button secondary" type="submit">Guardar preferencias musicales</button></form></div>
       <div className="listening-settings"><h3>Seguir escuchando</h3><p className="small">Si lo activas, guardaremos la posición de tus canciones a medias en tu cuenta de Supabase para continuar en otros dispositivos. Esto es independiente de las estadísticas de rankings y resumen anual. Puedes desactivarlo y borrar las posiciones cuando quieras.</p><label className="check-label"><input type="checkbox" checked={resumeEnabled} disabled={bookmarkLoading} onChange={e=>changeBookmarkPreference(e.target.checked)}/>Guardar y sincronizar mis puntos de reproducción</label>{resumeEnabled&&<button className="button ghost" onClick={async()=>{if(!window.confirm('¿Eliminar todos los puntos guardados?'))return;const {error}=await supabase.from('playback_bookmarks').delete().eq('user_id',uid);if(error)notify(safeError(error));else{setBookmarks([]);notify('Puntos de reproducción borrados.');}}}>Borrar todos mis puntos guardados</button>}</div>
       </section><section className="surface profile-action"><button className="button secondary" onClick={()=>nav(approvedArtist?'artist':'listener',uid)}><Eye size={16}/> Ver perfil público</button><Sparkles size={27} color="#a88bff"/><h2>¿Creas música?</h2><p>Solicita convertir tu cuenta en perfil de artista. Nuestro equipo verificará la solicitud antes de permitir subidas.</p><button className="button secondary" onClick={()=>nav('studio')}>Ir a mi estudio <Disc3 size={16}/></button><hr/><button className="text-button" onClick={logOut}><LogOut size={16}/> Cerrar sesión</button></section></div>

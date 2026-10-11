@@ -1,20 +1,12 @@
-# OVIO Beta v1.9
+# OVIO Beta v2.0
 
-Streaming social para artistas independientes (beta sin monetización). Proyecto React/Vite conectado al Supabase existente y desplegable en Vercel.
+Plataforma musical independiente — React + Vite + Supabase, desplegable en Vercel.
 
-## Instalar
+**Lee `INSTALAR-V20.md` antes de actualizar**. Contiene el orden seguro para desplegar y, si lo deseas, activar Cloudflare Turnstile sin bloquear el inicio de sesión.
 
-Lee [INSTALAR-V19.md](INSTALAR-V19.md) para integrar la actualización sobre tu repositorio.
+- `PRUEBAS-V20.md`: matriz de pruebas multiusuario y derechos de acceso.
+- `sql/014_auditoria_beta_publica_SOLO_LECTURA.sql`: consultas que NO modifican la base de datos.
+- `sql/014_restriccion_roles_ADMIN_OPCIONAL.sql`: cambio opcional de privilegios, con respaldo previo.
+- `npm run check:beta`: inspección local; no se conecta a Supabase.
 
-```bash
-npm ci
-npm test
-npm run check:deploy
-npm run build
-```
-
-**Sin SQL nuevo:** mantiene las migraciones instaladas hasta la 013, incluida la privacidad de letras.
-
-Consulta [CHANGELOG-V19.md](CHANGELOG-V19.md) y [PRUEBAS-V19.md](PRUEBAS-V19.md) para ver los cambios y las verificaciones antes de publicar.
-
-No compartas ni subas claves secretas, contraseñas ni archivos `.env.local`.
+Registro abierto: sí. Monetización y publicidad: no. Licencia sobre canciones: solo obras de cuyos derechos dispone quien las sube, sujetas a moderación.

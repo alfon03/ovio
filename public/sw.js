@@ -1,6 +1,6 @@
-// OVIO v1.9 · PWA instalable. Cachea SOLO recursos ESTÁTICOS del mismo origen.
+// OVIO v2.0 · PWA instalable. Cachea SOLO recursos ESTÁTICOS del mismo origen.
 // Nunca cachea consultas Supabase, respuestas API, sesiones, letras ni documentos privados.
-const CACHE = 'ovio-pwa-static-v19';
+const CACHE = 'ovio-pwa-static-v20';
 const PRELOAD = ['/offline.html','/favicon.svg','/icons/icon-192.png','/icons/icon-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(PRELOAD)));

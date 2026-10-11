@@ -18,7 +18,7 @@ test('un fallo de renderizado tiene pantalla de recuperación',()=>{
   assert.match(main,/<ErrorBoundary><App \/><\/ErrorBoundary>/);
 });
 test('la PWA cambia de versión sin cachear contenido privado',()=>{
-  assert.match(sw,/ovio-pwa-static-v19/);
+  assert.match(sw,/ovio-pwa-static-v20/);
   assert.match(sw,/url\.origin !== self\.location\.origin/);
   assert.doesNotMatch(sw,/cache\.put\(.*supabase/);
 });
