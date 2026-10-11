@@ -4,10 +4,12 @@ import {
   Settings, LogOut, Heart, Play, Pause, SkipBack, SkipForward, Volume2,
   Plus, Music2, Disc3, UploadCloud, ShieldCheck, Radio, Link2,
   X, Check, Clock3, ArrowLeft, BadgeCheck, Flag, Sparkles, LockKeyhole, Bell, BellRing,
-  Globe2, Menu, Trash2, AlertCircle, Eye, Headphones, RefreshCcw, Share2, ImagePlus, Bookmark, Send, Newspaper, Trophy, CalendarDays, TrendingUp, Shuffle, Repeat, Repeat1, ListPlus, ListOrdered, ChevronUp, ChevronDown, MessageSquare, ClipboardCheck, ArrowRight, FileText, Download
+  Globe2, Menu, Trash2, AlertCircle, Eye, Headphones, RefreshCcw, Share2, ImagePlus, Bookmark, Send, Newspaper, Trophy, CalendarDays, TrendingUp, Shuffle, Repeat, Repeat1, ListPlus, ListOrdered, ChevronUp, ChevronDown, MessageSquare, ClipboardCheck, ArrowRight, FileText, Download, WifiOff, RotateCw
 } from 'lucide-react';
 import { supabase, configured, assetUrl, safeError } from './supabase';
 import { recommendTracks, latestFromFollowed } from './discovery';
+import { buildExploreCollections } from './explore-collections';
+import { playbackErrorMessage, canRetryPlayback } from './playback-recovery';
 import { buildPersonalizedMixes, recommendAlbums } from './mixes';
 import { listenedDelta } from './analytics';
 import ArtistInsights from './ArtistInsights';
@@ -232,6 +234,16 @@ export default function App(){
   const [genre,setGenre] = useState('Todos');
   const [current,setCurrent] = useState(null);
   const [playing,setPlaying] = useState(false);
+  const [playerError,setPlayerError] = useState('');
+  const [buffering,setBuffering] = useState(false);
+  const [offline,setOffline] = useState(()=>!navigator.onLine);
+  useEffect(()=>{
+    const connected=()=>setOffline(false);
+    const disconnected=()=>setOffline(true);
+    window.addEventListener('online',connected);
+    window.addEventListener('offline',disconnected);
+    return()=>{window.removeEventListener('online',connected);window.removeEventListener('offline',disconnected);};
+  },[]);
   const [elapsed,setElapsed] = useState(0);
   const [duration,setDuration] = useState(0);
   const [volume,setVolume] = useState(.75);
@@ -437,12 +449,15 @@ export default function App(){
         resumeStartRef.current=null;
       }
     };
-    const onEnded=()=>{void clearBookmarkRef.current?.(currentRef.current);void flushListeningProgress();setPlaying(false);nextTrackRef.current?.(false,true);};
-    const onPause=()=>{bookmarkNowRef.current?.(true);void flushListeningProgress();setPlaying(false);};
+    const onEnded=()=>{setBuffering(false);void clearBookmarkRef.current?.(currentRef.current);void flushListeningProgress();setPlaying(false);nextTrackRef.current?.(false,true);};
+    const onPause=()=>{bookmarkNowRef.current?.(true);void flushListeningProgress();setPlaying(false);setBuffering(false);};
     const onPlay=()=>{const p=playbackRef.current;if(p){p.lastTime=a.currentTime;p.lastWall=Date.now();}setPlaying(true);};
+    const onPlaying=()=>{setBuffering(false);setPlayerError('');};
+    const onWaiting=()=>{if(currentRef.current)setBuffering(true);};
+    const onAudioError=()=>{if(!currentRef.current)return;setPlaying(false);setBuffering(false);setPlayerError(playbackErrorMessage(a.error?.code,!navigator.onLine));};
     const onSeek=()=>{const p=playbackRef.current;if(p){p.lastTime=a.currentTime;p.lastWall=Date.now();}bookmarkNowRef.current?.(true);};
-    a.addEventListener('timeupdate',onTime);a.addEventListener('loadedmetadata',onDuration);a.addEventListener('ended',onEnded);a.addEventListener('play',onPlay);a.addEventListener('pause',onPause);a.addEventListener('seeked',onSeek);
-    return ()=>{a.pause();a.removeEventListener('timeupdate',onTime);a.removeEventListener('loadedmetadata',onDuration);a.removeEventListener('ended',onEnded);a.removeEventListener('play',onPlay);a.removeEventListener('pause',onPause);a.removeEventListener('seeked',onSeek)};
+    a.addEventListener('timeupdate',onTime);a.addEventListener('loadedmetadata',onDuration);a.addEventListener('ended',onEnded);a.addEventListener('play',onPlay);a.addEventListener('pause',onPause);a.addEventListener('seeked',onSeek);a.addEventListener('playing',onPlaying);a.addEventListener('waiting',onWaiting);a.addEventListener('error',onAudioError);
+    return ()=>{a.pause();a.removeEventListener('timeupdate',onTime);a.removeEventListener('loadedmetadata',onDuration);a.removeEventListener('ended',onEnded);a.removeEventListener('play',onPlay);a.removeEventListener('pause',onPause);a.removeEventListener('seeked',onSeek);a.removeEventListener('playing',onPlaying);a.removeEventListener('waiting',onWaiting);a.removeEventListener('error',onAudioError)};
   },[]);
   useEffect(()=>{if(audioRef.current)audioRef.current.volume=volume},[volume]);
   // Refresco ligero del buzón: no cambia el reproductor ni fuerza a recargar toda la app.
@@ -547,6 +562,7 @@ export default function App(){
     tracks:database.tracks, likes:database.likes, listens:database.listens,
     follows:database.follows, followerCounts:database.followerCounts, limit:30
   }),[database.tracks,database.likes,database.listens,database.follows,database.followerCounts]);
+  const exploreCollections=useMemo(()=>buildExploreCollections({tracks:database.tracks,followerCounts:database.followerCounts,limit:8}),[database.tracks,database.followerCounts]);
   const personalizedMixes=useMemo(()=>buildPersonalizedMixes({
     tracks:database.tracks,likes:database.likes,listens:database.listens,
     follows:database.follows,followerCounts:database.followerCounts,limit:12
@@ -653,7 +669,7 @@ export default function App(){
     const requestId=++playRequestRef.current;
     const {data,error}=await supabase.storage.from('song-audio').createSignedUrl(t.audio_path,3600);
     if(requestId!==playRequestRef.current)return;
-    if(error){notify('No se puede reproducir esta canción: '+safeError(error));return;}
+    if(error){if(currentRef.current===t.id){setBuffering(false);setPlayerError('No se pudo obtener el audio. Comprueba la conexión e inténtalo de nuevo.');}notify('No se puede reproducir esta canción: '+safeError(error));return;}
     const a=audioRef.current;
     if(!a)return;
     bookmarkNowRef.current?.(true);
@@ -667,10 +683,11 @@ export default function App(){
     if(keepQueue&&position!==null){setPlayerQueue({...queueRef.current,cursor:position});}
     else if(!keepQueue){setPlayerQueue(createQueue(t.id,context.filter(x=>x.status==='approved').map(x=>x.id),{shuffle:queueRef.current.shuffle,repeat:queueRef.current.repeat}));}
     currentRef.current=t.id;setCurrent(t);setElapsed(0);setDuration(t.duration_seconds||0);
+    setPlayerError('');setBuffering(true);
     lastBookmarkWriteRef.current={trackId:t.id,seconds:0};
     resumeStartRef.current=resumeAt>0?{trackId:t.id,seconds:resumeAt}:null;
     a.src=data.signedUrl;
-    try{await a.play()}catch(err){if(requestId===playRequestRef.current)notify('El navegador ha bloqueado la reproducción. Pulsa Play.');}
+    try{await a.play()}catch(err){if(requestId===playRequestRef.current){setBuffering(false);setPlayerError(err?.name==='NotAllowedError'?'El navegador ha bloqueado el inicio automático. Pulsa Reintentar.':playbackErrorMessage(a.error?.code,!navigator.onLine));}}
   }
   async function nextTrack(back=false,ended=false){
     const q=queueRef.current;
@@ -682,6 +699,17 @@ export default function App(){
     if(!t)return notify('La siguiente canción ya no está disponible.');
     await playTrack(t,publicTracks,{keepQueue:true,position});
   }
+  async function retryPlayback(){
+    if(!canRetryPlayback(current,offline))return;
+    const a=audioRef.current;
+    // Si el navegador solo bloqueó el inicio automático, conserva la URL y el progreso.
+    if(a?.currentSrc&&!a.error){
+      try{await a.play();setPlayerError('');return;}catch(err){
+        if(err?.name==='NotAllowedError'){setPlayerError('Pulsa Play para iniciar el audio en este dispositivo.');return;}
+      }
+    }
+    await playTrack(current,publicTracks,{keepQueue:true,position:queueRef.current.cursor,resumeAt:elapsed});
+  }
   function addToQueue(t){
     if(!current){void playTrack(t);return;}
     if(queueRef.current.ids.includes(t.id))return notify('Esta canción ya está en la cola.');
@@ -690,6 +718,25 @@ export default function App(){
   function removeFromQueue(id){setPlayerQueue(removeUpcoming(queueRef.current,id));}
   function adjustQueue(id,delta){setPlayerQueue(moveUpcoming(queueRef.current,id,delta));}
   nextTrackRef.current=(back=false,ended=false)=>nextTrack(back,ended);
+  // Controles del sistema (pantalla bloqueada, auriculares, PWA). No almacena audio en el dispositivo.
+  useEffect(()=>{
+    const media=navigator.mediaSession;
+    if(!media)return;
+    if(current && 'MediaMetadata' in window){
+      const cover=assetUrl('covers',coverForTrack(current));
+      media.metadata=new window.MediaMetadata({title:current.title,artist:artistName(current.artist_id),album:releaseFor(current.release_id)?.title||'OVIO',artwork:cover?[{src:cover}]:[]});
+    }else media.metadata=null;
+    media.playbackState=current?(playing?'playing':'paused'):'none';
+    const handlers={
+      play:()=>audioRef.current?.play().catch(()=>setPlayerError('No se pudo reanudar. Abre OVIO y pulsa Reintentar.')),
+      pause:()=>audioRef.current?.pause(),
+      previoustrack:()=>nextTrackRef.current?.(true),
+      nexttrack:()=>nextTrackRef.current?.(false),
+      seekto:details=>{const a=audioRef.current;if(a&&Number.isFinite(details.seekTime))a.currentTime=Math.max(0,Math.min(details.seekTime,Number.isFinite(a.duration)?a.duration:details.seekTime));}
+    };
+    for(const [action,handler] of Object.entries(handlers)){try{media.setActionHandler(action,handler);}catch{ /* Acción no soportada */ }}
+    return()=>{for(const action of Object.keys(handlers)){try{media.setActionHandler(action,null);}catch{}}};
+  },[current?.id,playing, database.artists,database.profiles,database.releases]);
   recordListenRef.current=(trackId)=>recordListen(trackId);
   async function recordListen(id){
     if(!uid)return;
@@ -897,7 +944,7 @@ export default function App(){
   }
   async function logOut(){
     bookmarkNowRef.current?.(true);audioRef.current?.pause();void flushListeningProgress();playbackRef.current=null;
-    ++playRequestRef.current;currentRef.current=null;setCurrent(null);setPlayerQueue({ids:[],baseIds:[],cursor:-1,shuffle:false,repeat:'off'});
+    ++playRequestRef.current;currentRef.current=null;setCurrent(null);setPlayerError('');setBuffering(false);setPlayerQueue({ids:[],baseIds:[],cursor:-1,shuffle:false,repeat:'off'});
     setBookmarks([]);setResumeEnabled(false);bookmarkEnabledRef.current=false;bookmarkUserRef.current=null;
     await supabase.auth.signOut();setPage('home');
   }
@@ -914,7 +961,7 @@ export default function App(){
     <div className="row wrap mix-actions"><button className="button primary" onClick={()=>playTrack(mix.tracks[0],mix.tracks)}><Play size={15}/> Escuchar</button>
     <button className="button secondary" onClick={()=>saveSuggestedMix(mix)}><ListPlus size={15}/> Guardar como playlist</button></div>
   </article>)}</div>;
-  const trackCard=(t,i)=> <div className="music-card" key={t.id}><button className="art-button" onClick={()=>playTrack(t,recommended)} aria-label={`Reproducir ${t.title}`}><Cover title={t.title} genre={t.genre} n={i} coverPath={coverForTrack(t)}/><span className="art-play"><Play size={17} fill="white"/></span></button><button className="item-link" onClick={()=>nav('artist',t.artist_id)}>{t.title}</button><div className="item-sub">{artistName(t.artist_id)} · {t.genre}</div></div>;
+  const trackCard=(t,i,context=recommended)=> <div className="music-card" key={t.id}><button className="art-button" onClick={()=>playTrack(t,context)} aria-label={`Reproducir ${t.title}`}><Cover title={t.title} genre={t.genre} n={i} coverPath={coverForTrack(t)}/><span className="art-play"><Play size={17} fill="white"/></span></button><button className="item-link" onClick={()=>nav('artist',t.artist_id)}>{t.title}</button><div className="item-sub">{artistName(t.artist_id)} · {t.genre}</div></div>;
   const trackRow=(t,i,playlistId=null,context=publicTracks)=> <div className="track-row" key={t.id}><span className="track-number">{i+1}</span><button className="track-main" onClick={()=>playTrack(t,context)}><Cover compact title={t.title} n={i} coverPath={coverForTrack(t)}/><span><b>{t.title}</b><small>{artistName(t.artist_id)} · {formatTime(t.duration_seconds)}</small></span></button><span className="table-genre">{t.genre}</span><button title={liked(t.id)?'Quitar favorito':'Favorito'} className={'icon-button '+(liked(t.id)?'on':'')} onClick={()=>toggleLike(t.id)}><Heart size={18} fill={liked(t.id)?'currentColor':'none'}/></button>{playlistId?<button title="Quitar de la playlist" className="icon-button" onClick={()=>removeSongFromPlaylist(playlistId,t.id)}><X size={18}/></button>:<button title="Añadir a playlist" className="icon-button" onClick={()=>setModal({type:'add',track:t})}><Plus size={18}/></button>}<button title="Añadir a la cola" aria-label={`Añadir ${t.title} a la cola`} className="icon-button queue-add" onClick={()=>addToQueue(t)}><ListPlus size={17}/></button><button title="Denunciar posible infracción de derechos" className="icon-button subtle" onClick={()=>setModal({type:'report',track:t})}><Flag size={15}/></button></div>;
 
   async function exitRecovery(message=''){
@@ -990,17 +1037,36 @@ export default function App(){
     </>;
   }
   if(page==='search'||page==='explore'){
-    const term=query.trim().toLowerCase();
-    const filtered=publicTracks.filter(t=>(genre==='Todos'||t.genre===genre)&&(!term||[t.title,t.genre,artistName(t.artist_id),releaseFor(t.release_id)?.title].join(' ').toLowerCase().includes(term)));
-    const albumResults=database.releases.filter(r=>publicTracks.some(t=>t.release_id===r.id)&&(!term||[r.title,artistName(r.artist_id)].join(' ').toLowerCase().includes(term)));
-    body=<><header className="page-header"><span className="eyebrow">{page==='search'?'BUSCAR EN OVIO':'DESCUBRE TALENTO'}</span><h1>{page==='search'?'¿Qué quieres escuchar?':'Tu radar musical'}</h1><p>Explora canciones, álbumes, géneros y artistas independientes.</p></header>
-      <div className="searchbar"><Search size={20}/><input autoFocus={page==='search'} value={query} onChange={e=>setQuery(e.target.value)} placeholder="Busca canciones, artistas, álbumes..."/></div>
-      <div className="chip-row">{genres.map(g=><button key={g} onClick={()=>setGenre(g)} className={'chip '+(genre===g?'chosen':'')}>{g}</button>)}</div>
-      {page==='explore'&&personalizedMixes.length>0&&<><SectionHeading title="Playlists sugeridas para ti" detail="Escucha un mix o guárdalo en tu biblioteca"/>{mixTiles(personalizedMixes)}</>}
-      <SectionHeading title={`${filtered.length} canciones encontradas`}/><div className="track-list">{filtered.map((t,i)=>trackRow(t,i))}{!filtered.length&&<Blank title="Todavía no hay resultados" description="Prueba otro género o vuelve cuando se hayan aprobado más canciones."/>}</div>
-      <SectionHeading title="Álbumes y EPs"/><div className="music-grid">{albumResults.slice(0,10).map((r,i)=><button className="music-card" key={r.id} onClick={()=>nav('album',r.id)}><Cover title={r.title} coverPath={r.cover_path} n={i+1}/><b>{r.title}</b><small>{artistName(r.artist_id)} · {r.kind.toUpperCase()}</small></button>)}</div>
-      <SectionHeading title="Artistas emergentes"/>
-      <div className="artist-grid">{database.artists.filter(a=>a.status==='approved'&&(!term||a.artist_name.toLowerCase().includes(term))).slice(0,12).map(a=><button className="artist-card" key={a.user_id} onClick={()=>nav('artist',a.user_id)}><Avatar profile={profileFor(a.user_id)} size="large"/><b>{a.artist_name}</b><span>{a.genre} · Artista</span></button>)}</div>
+    const term=query.trim().toLocaleLowerCase('es');
+    const filtered=publicTracks.filter(t=>(genre==='Todos'||t.genre===genre)&&(!term||[t.title,t.genre,artistName(t.artist_id),releaseFor(t.release_id)?.title].join(' ').toLocaleLowerCase('es').includes(term)));
+    const albumResults=database.releases.filter(r=>publicTracks.some(t=>t.release_id===r.id)&&(!term||[r.title,artistName(r.artist_id)].join(' ').toLocaleLowerCase('es').includes(term)));
+    const discoveryOverview=page==='explore'&&!term&&genre==='Todos';
+    const filterGenres=[...genres,...exploreCollections.genres.map(g=>g.genre).filter(g=>!genres.includes(g))];
+    function chooseGenre(name){setGenre(name);document.getElementById('ovio-explore-catalog')?.scrollIntoView({behavior:'smooth',block:'start'});}
+    body=<>
+      {page==='explore'?<div className="explore-banner">
+        <div className="explore-banner-content"><span className="eyebrow"><Sparkles size={14}/> EL RADAR DE OVIO</span><h1>Escucha algo <span className="grad-text">inesperado.</span></h1><p>Nuevos sonidos, creadores independientes y géneros por descubrir. Solo música aprobada por nuestro equipo.</p>
+          <div className="row wrap"><button className="button primary" onClick={()=>{setQuery('');setGenre('Todos');document.getElementById('ovio-explore-catalog')?.scrollIntoView({behavior:'smooth'});}}>Explorar catálogo <ArrowRight size={16}/></button>{exploreCollections.latest[0]&&<button className="button secondary" onClick={()=>playTrack(exploreCollections.latest[0],exploreCollections.latest)}><Play size={15}/> Escuchar novedad</button>}</div>
+        </div><div className="explore-banner-orbit" aria-hidden="true"><Logo small/></div>
+      </div>:<header className="page-header"><span className="eyebrow">BUSCAR EN OVIO</span><h1>¿Qué quieres escuchar?</h1><p>Encuentra canciones, álbumes y artistas independientes.</p></header>}
+      {discoveryOverview&&<>
+        <SectionHeading title="Recién estrenadas" detail="Las últimas canciones aprobadas, con espacio para artistas diferentes." button={<button className="small-link" onClick={()=>document.getElementById('ovio-explore-catalog')?.scrollIntoView({behavior:'smooth'})}>Ver catálogo <ArrowRight size={14}/></button>}/>
+        {exploreCollections.latest.length?<div className="music-grid explore-cards">{exploreCollections.latest.slice(0,6).map((t,i)=>trackCard(t,i,exploreCollections.latest))}</div>:<p className="empty-inline">Los próximos estrenos aparecerán aquí cuando se aprueben.</p>}
+        {exploreCollections.genres.length>0&&<><SectionHeading title="Encuentra tu sonido" detail="Descubre géneros que ya tienen canciones en OVIO."/><div className="explore-genre-grid">{exploreCollections.genres.map((g,i)=><button key={g.genre} className={'explore-genre-card explore-genre-'+(i%6)} onClick={()=>chooseGenre(g.genre)}><span className="explore-genre-top"><Music2 size={19}/><ArrowRight size={17}/></span><strong>{g.genre}</strong><small>{g.count} {g.count===1?'canción':'canciones'}</small></button>)}</div></>}
+        {recommended.length>0&&<><SectionHeading title="Tu próximo descubrimiento" detail="Sugerencias según tus favoritos y artistas seguidos, cuando están disponibles."/><div className="music-grid explore-cards">{recommended.slice(0,6).map((t,i)=>trackCard(t,i,recommended))}</div></>}
+        {exploreCollections.hiddenGems.length>0&&<><SectionHeading title="Joyas ocultas" detail="Canciones de artistas con cinco seguidores o menos en OVIO; no es un ranking de popularidad."/><div className="track-list explore-hidden-list">{exploreCollections.hiddenGems.slice(0,5).map((t,i)=>trackRow(t,i,null,exploreCollections.hiddenGems))}</div></>}
+        {followedReleases.length>0&&<><SectionHeading title="Lo nuevo de quienes sigues" detail="Lanzamientos recientes de los artistas que sigues."/><div className="music-grid explore-cards">{followedReleases.slice(0,6).map((t,i)=>trackCard(t,i,followedReleases))}</div></>}
+        {personalizedMixes.length>0&&<><SectionHeading title="Mixes para ti" detail="Una selección que puedes escuchar o guardar como playlist privada."/>{mixTiles(personalizedMixes)}</>}
+      </>}
+      <div id="ovio-explore-catalog" className="explore-catalog">
+        {page==='explore'&&<SectionHeading title="Todo el catálogo" detail="Filtra por género o busca tu próxima canción."/>}
+        <div className="searchbar"><Search size={20}/><input autoFocus={page==='search'} value={query} onChange={e=>setQuery(e.target.value)} placeholder="Busca canciones, artistas, álbumes..." aria-label="Buscar en OVIO"/></div>
+        <div className="chip-row" role="group" aria-label="Filtrar por género">{filterGenres.map(g=><button key={g} onClick={()=>setGenre(g)} aria-pressed={genre===g} className={'chip '+(genre===g?'chosen':'')}>{g}</button>)}</div>
+        <SectionHeading title={`${filtered.length} ${filtered.length===1?'canción encontrada':'canciones encontradas'}`}/><div className="track-list">{filtered.map((t,i)=>trackRow(t,i,null,filtered))}{!filtered.length&&<Blank title="Todavía no hay resultados" description="Prueba otro género o vuelve cuando se hayan aprobado más canciones." button={(genre!=='Todos'||term)?<button className="button secondary" onClick={()=>{setGenre('Todos');setQuery('');}}>Limpiar filtros</button>:null}/>}</div>
+        <SectionHeading title="Álbumes y EPs"/><div className="music-grid">{albumResults.slice(0,10).map((r,i)=><button className="music-card" key={r.id} onClick={()=>nav('album',r.id)}><Cover title={r.title} coverPath={r.cover_path} n={i+1}/><b>{r.title}</b><small>{artistName(r.artist_id)} · {r.kind.toUpperCase()}</small></button>)}{!albumResults.length&&<p className="empty-inline">Aún no hay álbumes que coincidan con la búsqueda.</p>}</div>
+        <SectionHeading title="Artistas independientes"/>
+        <div className="artist-grid">{database.artists.filter(a=>a.status==='approved'&&(!term||a.artist_name.toLocaleLowerCase('es').includes(term))).slice(0,12).map(a=><button className="artist-card" key={a.user_id} onClick={()=>nav('artist',a.user_id)}><Avatar profile={profileFor(a.user_id)} size="large"/><b>{a.artist_name}</b><span>{a.genre} · Artista</span></button>)}</div>
+      </div>
     </>;
   }
   if(page==='library'){
@@ -1119,12 +1185,12 @@ export default function App(){
     <div className="main-column"><header className="topbar"><div className="row"><button className="icon-button mobile-menu" ref={mobileMenuTrigger} type="button" onClick={()=>setMobileMenu(v=>!v)} aria-controls="ovio-sidebar" aria-expanded={mobileMenu} aria-label={mobileMenu?'Cerrar menú':'Abrir menú'}><Menu/></button><span className="top-greeting">La música se descubre juntos.</span></div><div className="row"><span className="beta-label">OVIO BETA · 1.7</span><button className="notification-bell" aria-label={`Notificaciones: ${unreadCount} sin leer`} title="Notificaciones" onClick={()=>nav('notifications')}>{unreadCount?<BellRing size={19}/>:<Bell size={19}/>} {unreadCount>0&&<span className="bell-count">{unreadCount>99?'99+':unreadCount}</span>}</button><button className="account-button" onClick={()=>nav('profile')}><Avatar profile={myProfile}/><span>{myProfile.display_name}</span><Settings size={16}/></button></div></header>
       <main className="main-content" id="contenido-principal" tabIndex="-1">{loading&&<div className="sync-note"><RefreshCcw size={14}/> Actualizando contenido...</div>}{body}</main>
     </div>
-    <div className={'player '+(!current?'no-song':'')}><div className="now-playing">{current?<><button className="player-cover-button" aria-label="Abrir reproductor completo" onClick={()=>setModal({type:'player'})}><Cover compact title={current.title} n={1} coverPath={coverForTrack(current)}/></button><div><b>{current.title}</b><button onClick={()=>nav('artist',current.artist_id)}>{artistName(current.artist_id)}</button></div><button aria-label="Favorito" className={'icon-button '+(liked(current.id)?'on':'')} onClick={()=>toggleLike(current.id)}><Heart size={17} fill={liked(current.id)?'currentColor':'none'}/></button></>:<><span className="player-placeholder"><Music2 size={18}/></span><div><b>Nada reproduciéndose</b><small>Elige una canción</small></div></>}</div>
+    <div className={'player '+(!current?'no-song':'')}>{current&&(playerError||offline||buffering)&&<div className={'player-health '+(playerError||offline?'has-error':'')} role="status"><span>{offline?<><WifiOff size={15}/> Sin conexión: el audio necesita internet.</>:playerError?<><AlertCircle size={15}/> {playerError}</>:<><RefreshCcw size={15} className="player-spin"/> Cargando audio…</>}</span>{(playerError||offline)&&<button className="button tiny secondary" onClick={retryPlayback} disabled={!canRetryPlayback(current,offline)}><RotateCw size={14}/> Reintentar</button>}</div>}<div className="now-playing">{current?<><button className="player-cover-button" aria-label="Abrir reproductor completo" onClick={()=>setModal({type:'player'})}><Cover compact title={current.title} n={1} coverPath={coverForTrack(current)}/></button><div><b>{current.title}</b><button onClick={()=>nav('artist',current.artist_id)}>{artistName(current.artist_id)}</button></div><button aria-label="Favorito" className={'icon-button '+(liked(current.id)?'on':'')} onClick={()=>toggleLike(current.id)}><Heart size={17} fill={liked(current.id)?'currentColor':'none'}/></button></>:<><span className="player-placeholder"><Music2 size={18}/></span><div><b>Nada reproduciéndose</b><small>Elige una canción</small></div></>}</div>
       <div className="player-center"><div className="transport"><button title="Aleatorio" aria-label={queueState.shuffle?'Desactivar aleatorio':'Activar aleatorio'} aria-pressed={queueState.shuffle} className={'mode-control '+(queueState.shuffle?'active':'')} onClick={()=>setPlayerQueue(toggleShuffle(queueRef.current))}><Shuffle size={17}/></button><button aria-label="Anterior" onClick={()=>nextTrack(true)} disabled={!current}><SkipBack size={19}/></button><button className="play-round" aria-label={playing?'Pausar':'Reproducir'} onClick={()=>{const a=audioRef.current;if(!current)return;if(a.paused)a.play().catch(()=>notify('No se pudo reproducir.'));else a.pause()}} disabled={!current}>{playing?<Pause size={19} fill="currentColor"/>:<Play size={19} fill="currentColor"/>}</button><button aria-label="Siguiente" onClick={()=>nextTrack()} disabled={!current}><SkipForward size={19}/></button><button title="Repetir" aria-label={`Modo repetir: ${queueState.repeat}`} className={'mode-control '+(queueState.repeat!=='off'?'active':'')} onClick={()=>setPlayerQueue(cycleRepeat(queueRef.current))}>{queueState.repeat==='one'?<Repeat1 size={17}/>:<Repeat size={17}/>}</button></div><div className="progress"><small>{formatTime(elapsed)}</small><input aria-label="Posición de reproducción" type="range" min="0" max={duration||1} step="1" value={Math.min(elapsed,duration||1)} disabled={!current} onChange={e=>{audioRef.current.currentTime=Number(e.target.value);setElapsed(Number(e.target.value))}}/><small>{formatTime(duration)}</small></div></div>
       <div className="player-right"><button className="queue-open" title="Ver cola" aria-label="Ver cola de reproducción" onClick={()=>setModal({type:'queue'})}><ListOrdered size={19}/><span>Cola</span>{queueState.ids.length>0&&<small>{Math.max(0,queueState.ids.length-queueState.cursor-1)}</small>}</button><Volume2 size={17}/><input aria-label="Volumen" type="range" min="0" max="1" step=".05" value={volume} onChange={e=>setVolume(Number(e.target.value))}/></div></div>
     <nav className="bottom-nav" aria-label="Menú móvil"><button className={page==='home'?'active':''} onClick={()=>nav('home')}><Home/>Inicio</button><button className={page==='search'?'active':''} onClick={()=>nav('search')}><Search/>Buscar</button><button className={page==='explore'?'active':''} onClick={()=>nav('explore')}><Compass/>Descubrir</button><button className={page==='library'?'active':''} onClick={()=>nav('library')}><Library/>Biblioteca</button><button className={page==='profile'?'active':''} onClick={()=>nav('profile')}><UserRound/>Perfil</button></nav>
     {modal&&<div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget&&!uploading)setModal(null)}}><div className="modal"><button className="icon-button modal-close" onClick={()=>{if(!uploading)setModal(null)}} aria-label="Cerrar"><X/></button>
-      {modal.type==='player'&&<><span className="eyebrow">SONANDO EN OVIO</span><h2>Reproductor</h2>{current?<div className="expanded-player"><div className="expanded-cover"><Cover title={current.title} genre={current.genre} coverPath={coverForTrack(current)}/></div><h3>{current.title}</h3><button className="text-button" onClick={()=>{setModal(null);nav('artist',current.artist_id)}}>{artistName(current.artist_id)}</button><div className="expanded-progress"><input aria-label="Posición de reproducción" type="range" min="0" max={duration||1} step="1" value={Math.min(elapsed,duration||1)} onChange={e=>{audioRef.current.currentTime=Number(e.target.value);setElapsed(Number(e.target.value))}}/><div className="row space-between"><small>{formatTime(elapsed)}</small><small>{formatTime(duration)}</small></div></div><div className="expanded-controls"><button className={'mode-control '+(queueState.shuffle?'active':'')} aria-label="Aleatorio" aria-pressed={queueState.shuffle} onClick={()=>setPlayerQueue(toggleShuffle(queueRef.current))}><Shuffle size={19}/></button><button aria-label="Anterior" onClick={()=>nextTrack(true)}><SkipBack size={23}/></button><button className="play-round" aria-label={playing?'Pausar':'Reproducir'} onClick={()=>{const a=audioRef.current;if(a.paused)a.play().catch(()=>notify('No se pudo reproducir.'));else a.pause()}}>{playing?<Pause size={25} fill="currentColor"/>:<Play size={25} fill="currentColor"/>}</button><button aria-label="Siguiente" onClick={()=>nextTrack()}><SkipForward size={23}/></button><button className={'mode-control '+(queueState.repeat!=='off'?'active':'')} aria-label={'Repetir '+queueState.repeat} onClick={()=>setPlayerQueue(cycleRepeat(queueRef.current))}>{queueState.repeat==='one'?<Repeat1 size={19}/>:<Repeat size={19}/>}</button></div><div className="expanded-player-bottom"><Volume2 size={16}/><input aria-label="Volumen" type="range" min="0" max="1" step=".05" value={volume} onChange={e=>setVolume(Number(e.target.value))}/><button className="button secondary" onClick={()=>setModal({type:'queue'})}><ListOrdered size={17}/> Cola</button></div></div>:<p>Elige una canción para empezar.</p>}</>}
+      {modal.type==='player'&&<><span className="eyebrow">SONANDO EN OVIO</span><h2>Reproductor</h2>{current&&(playerError||offline||buffering)&&<div className="expanded-health" role="status"><span>{offline?'Sin conexión: esta PWA no descarga las canciones.':playerError||'Cargando audio…'}</span>{(playerError||offline)&&<button className="button tiny secondary" onClick={retryPlayback} disabled={!canRetryPlayback(current,offline)}><RotateCw size={15}/> Reintentar</button>}</div>}{current?<div className="expanded-player"><div className="expanded-cover"><Cover title={current.title} genre={current.genre} coverPath={coverForTrack(current)}/></div><h3>{current.title}</h3><button className="text-button" onClick={()=>{setModal(null);nav('artist',current.artist_id)}}>{artistName(current.artist_id)}</button><div className="expanded-progress"><input aria-label="Posición de reproducción" type="range" min="0" max={duration||1} step="1" value={Math.min(elapsed,duration||1)} onChange={e=>{audioRef.current.currentTime=Number(e.target.value);setElapsed(Number(e.target.value))}}/><div className="row space-between"><small>{formatTime(elapsed)}</small><small>{formatTime(duration)}</small></div></div><div className="expanded-controls"><button className={'mode-control '+(queueState.shuffle?'active':'')} aria-label="Aleatorio" aria-pressed={queueState.shuffle} onClick={()=>setPlayerQueue(toggleShuffle(queueRef.current))}><Shuffle size={19}/></button><button aria-label="Anterior" onClick={()=>nextTrack(true)}><SkipBack size={23}/></button><button className="play-round" aria-label={playing?'Pausar':'Reproducir'} onClick={()=>{const a=audioRef.current;if(a.paused)a.play().catch(()=>notify('No se pudo reproducir.'));else a.pause()}}>{playing?<Pause size={25} fill="currentColor"/>:<Play size={25} fill="currentColor"/>}</button><button aria-label="Siguiente" onClick={()=>nextTrack()}><SkipForward size={23}/></button><button className={'mode-control '+(queueState.repeat!=='off'?'active':'')} aria-label={'Repetir '+queueState.repeat} onClick={()=>setPlayerQueue(cycleRepeat(queueRef.current))}>{queueState.repeat==='one'?<Repeat1 size={19}/>:<Repeat size={19}/>}</button></div><div className="expanded-player-bottom"><Volume2 size={16}/><input aria-label="Volumen" type="range" min="0" max="1" step=".05" value={volume} onChange={e=>setVolume(Number(e.target.value))}/><button className="button secondary" onClick={()=>setModal({type:'queue'})}><ListOrdered size={17}/> Cola</button></div></div>:<p>Elige una canción para empezar.</p>}</>}
       {modal.type==='queue'&&<><span className="eyebrow">REPRODUCTOR OVIO</span><h2>Cola de reproducción</h2><p>{current?`Escuchando: ${current.title}`:'Elige una canción para empezar.'} · Modo repetir: {queueState.repeat==='off'?'Desactivado':queueState.repeat==='all'?'Toda la lista':'Una canción'}.</p><div className="queue-modal-tools"><button className={'button tiny '+(queueState.shuffle?'primary':'secondary')} onClick={()=>setPlayerQueue(toggleShuffle(queueRef.current))}><Shuffle size={15}/> Aleatorio</button><button className="button tiny secondary" onClick={()=>setPlayerQueue(cycleRepeat(queueRef.current))}><Repeat size={15}/> Repetir: {queueState.repeat}</button></div><div className="queue-list">{queueState.ids.map((id,i)=>{const t=publicTracks.find(x=>x.id===id);return t?<div className={'queue-item '+(i===queueState.cursor?'is-current':'')} key={id}><Cover compact title={t.title} coverPath={coverForTrack(t)}/><div><b>{t.title}</b><small>{artistName(t.artist_id)} · {i===queueState.cursor?'Sonando':i<queueState.cursor?'Ya escuchada':'Próxima'}</small></div>{i>queueState.cursor&&<div className="queue-actions"><button className="icon-button" title="Subir" disabled={i===queueState.cursor+1} onClick={()=>adjustQueue(id,-1)}><ChevronUp size={17}/></button><button className="icon-button" title="Bajar" disabled={i===queueState.ids.length-1} onClick={()=>adjustQueue(id,1)}><ChevronDown size={17}/></button><button className="icon-button" title="Quitar de la cola" onClick={()=>removeFromQueue(id)}><X size={17}/></button></div>}{i===queueState.cursor&&<Headphones color="#A98BFF" size={18}/>}</div>:null;})}{!queueState.ids.length&&<p className="empty-inline">Todavía no hay canciones en la cola.</p>}</div></>}
       {modal.type==='report-update'&&<><h2>Denunciar publicación</h2><p>El equipo revisará el mensaje del artista. Tu denuncia no retirará automáticamente el contenido.</p><form className="stack" onSubmit={e=>{e.preventDefault();reportUpdate(new FormData(e.currentTarget))}}><label>Motivo<textarea required name="reason" minLength={15} maxLength={1500} placeholder="Explica qué norma se ha vulnerado..."/></label><button className="button primary">Enviar denuncia</button></form></>}
       {modal.type==='artist-update'&&<><span className="eyebrow">COMUNIDAD DE ARTISTAS</span><h2>Crear una novedad</h2><p>Podrás comunicar un estreno o contar en qué estás trabajando. El equipo revisará el texto antes de publicarlo.</p><form className="stack" onSubmit={e=>{e.preventDefault();publishUpdate(new FormData(e.currentTarget))}}><label>Tu mensaje<textarea required name="body" minLength={10} maxLength={500} placeholder="Hoy comparto una nueva canción con vosotros..."/></label><label>Vincular una canción propia aprobada (opcional)<select name="track_id"><option value="">Sin canción vinculada</option>{publicTracks.filter(t=>t.artist_id===uid).map(t=><option value={t.id} key={t.id}>{t.title}</option>)}</select></label><div className="warning">No publiques datos personales de terceros ni contenido que infrinja derechos. Las novedades pasan por moderación.</div><button className="button primary" type="submit">Enviar para revisión</button></form></>}

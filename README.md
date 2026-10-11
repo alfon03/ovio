@@ -1,22 +1,17 @@
-# OVIO — Beta v1.7
+# OVIO — Beta v1.8
 
-Plataforma musical independiente desarrollada con React, Vite y Supabase y desplegable en Vercel.
+Plataforma independiente de música hecha con React, Vite y Supabase, publicada en Vercel.
 
-## Nuevas mejoras de v1.7
+## Qué cambia en v1.8
 
-- **Menú Explorar desplegable**, abierto por defecto. Incluye Inicio, Buscar, Descubrir, Biblioteca, Comunidad, Top OVIO, Recap, primeros pasos y ayuda.
-- **Menú Creadores desplegable**, con OVIO Studio, letras privadas y estadísticas (solo para artistas aprobados) y notificaciones.
-- **Menú Moderación separado y desplegable** para administradores, con revisión de contenido, comentarios beta y panel del piloto.
-- Menú lateral **desplazable** para que no se corten opciones en pantallas pequeñas.
-- Diseño adaptado a tabletas y teléfonos: panel lateral con apertura/cierre, fondo oscurecido, tecla Escape, tamaños táctiles y áreas seguras de iPhone.
-- Estados accesibles (`aria-expanded`, `aria-current`, foco) y soporte para movimiento reducido.
-- Se conservan el reproductor, los borradores privados de letras, las funciones PWA, registro, analíticas, listas y moderación.
+- **Explorar renovado**: estrenos recientes, géneros con canciones reales, sugerencias, joyas ocultas, artistas seguidos y búsqueda en el catálogo.
+- **Reproductor más resistente**: estados de conexión y carga, reintento manual si falla una fuente, y controles del sistema operativo mediante Media Session cuando están disponibles.
+- **Responsive**: interfaz de exploración adaptada a móvil y PWA.
+- **Respeta la privacidad**: no cambia políticas RLS, no comparte borradores de letras, no incorpora estadísticas sin consentimiento y no guarda audios offline.
 
-## Actualización desde v1.6
+## Instalación y pruebas
 
-Lee [INSTALAR-V17.md](./INSTALAR-V17.md) y sigue las pruebas de [PRUEBAS-V17.md](./PRUEBAS-V17.md).
-
-**Esta versión no necesita nuevas migraciones SQL**. Se instala en la misma aplicación de Vercel y con el mismo proyecto Supabase.
+Consulta [INSTALAR-V18.md](./INSTALAR-V18.md) y [PRUEBAS-V18.md](./PRUEBAS-V18.md). Esta versión es compatible con OVIO v1.7 y **no necesita SQL**.
 
 ```bash
 npm ci
@@ -25,11 +20,8 @@ npm run check:deploy
 npm run build
 ```
 
-`check:deploy` requiere variables VITE_ válidas en el entorno local. Conservar tu `.env.local` actual; no distribuirlo ni guardarlo en Git. Nunca usar claves secretas o `service_role` en el frontend.
+Para `check:deploy` son necesarias tus variables públicas de Supabase en `.env.local` (o el entorno). **Nunca subas** ese archivo ni claves secretas al repositorio.
 
-## Estado
+## Estado de validación
 
-- 71 pruebas unitarias completadas correctamente.
-- Sintaxis JS/JSX validada.
-- La compilación Vite de producción debe completarse en el ordenador o Vercel: este entorno no puede acceder al registro de paquetes npm.
-- No se han probado sesiones reales con tu Supabase desde este entorno.
+Las pruebas unitarias y la comprobación de sintaxis JS/JSX se han ejecutado en este entorno. No se ha podido completar `npm run build` aquí porque `npm ci` no consiguió descargar las dependencias desde npm. Ejecuta la compilación local antes de enviar el proyecto a Vercel; la integración con Supabase y la reproducción real también deben verificarse en tus dispositivos.
