@@ -10,6 +10,7 @@ import { supabase, configured, assetUrl, safeError } from './supabase';
 import { recommendTracks, latestFromFollowed } from './discovery';
 import { buildExploreCollections } from './explore-collections';
 import { playbackErrorMessage, canRetryPlayback } from './playback-recovery';
+import { appendListen } from './session-stability';
 import { buildPersonalizedMixes, recommendAlbums } from './mixes';
 import { listenedDelta } from './analytics';
 import ArtistInsights from './ArtistInsights';
@@ -318,6 +319,13 @@ export default function App(){
   const currentRef = useRef(null);
   const nextTrackRef = useRef(null);
   const recordListenRef = useRef(null);
+  const activeAccountRef = useRef(null);
+  const dataLoadVersionRef = useRef(0);
+  useEffect(()=>{
+    activeAccountRef.current = session?.user?.id || null;
+    // Invalida cargas aún pendientes de otro usuario, incluso si vuelve a iniciar sesión.
+    dataLoadVersionRef.current += 1;
+  },[session?.user?.id]);
   useEffect(()=>{analyticsEnabledRef.current=analyticsSettings.analytics_enabled;},[analyticsSettings.analytics_enabled]);
   useEffect(()=>{bookmarkEnabledRef.current=resumeEnabled;bookmarkUserRef.current=session?.user?.id||null;},[resumeEnabled,session?.user?.id]);
   function setPlayerQueue(q){queueRef.current=q;setQueueState(q);}
@@ -344,7 +352,19 @@ export default function App(){
     return ()=>{alive=false;subscription.unsubscribe()};
   },[]);
   useEffect(()=>{
-    if(!session?.user){setDatabase({profiles:[],artists:[],tracks:[],releases:[],likes:[],follows:[],playlists:[],playlistTracks:[],listens:[],reports:[],stats:[],followerCounts:[],notifications:[],playlistSaves:[],artistUpdates:[],updateReports:[],savedReleases:[]});setIsAdmin(false);setBookmarks([]);setResumeEnabled(false);return;}
+    if(!session?.user){
+      // Supabase puede cerrar sesión desde otra pestaña: detener audio y borrar datos visibles.
+      ++playRequestRef.current;
+      if(audioRef.current){audioRef.current.pause();audioRef.current.removeAttribute('src');audioRef.current.load();}
+      currentRef.current=null;playbackRef.current=null;countedRef.current.clear();
+      setCurrent(null);setPlaying(false);setPlayerError('');setBuffering(false);
+      setPlayerQueue({ids:[],baseIds:[],cursor:-1,shuffle:false,repeat:'off'});
+      setDatabase({profiles:[],artists:[],tracks:[],releases:[],likes:[],follows:[],playlists:[],playlistTracks:[],listens:[],reports:[],stats:[],followerCounts:[],notifications:[],playlistSaves:[],artistUpdates:[],updateReports:[],savedReleases:[]});
+      setIsAdmin(false);setBookmarks([]);setResumeEnabled(false);setAnalyticsSettings({country_code:'ZZ',analytics_enabled:false});
+      setDraftAnalyticsSettings({country_code:'ZZ',analytics_enabled:false});analyticsEnabledRef.current=false;
+      setLoading(false);setPage('home');setSelected(null);setModal(null);
+      return;
+    }
     loadAll(session.user.id);
   },[session?.user?.id]);
   useEffect(()=>{
@@ -476,25 +496,33 @@ export default function App(){
   },[session?.user?.id]);
 
   async function loadAll(uid=session?.user?.id){
-    if(!uid)return;
+    if(!uid||!supabase)return;
+    const version=++dataLoadVersionRef.current;
+    const fresh=()=>version===dataLoadVersionRef.current&&activeAccountRef.current===uid;
     setLoading(true);
+    try{
     const tables=['profiles','artist_applications','tracks','releases','likes','follows','playlists','playlist_tracks','listen_events','artists_public','playlist_saves','artist_updates','saved_releases'];
     const results=await Promise.all([...tables.map(t=>supabase.from(t).select('*').limit(1000)),supabase.rpc('is_admin'),supabase.rpc('my_track_stats'),supabase.rpc('artist_follower_counts')]);
+    if(!fresh())return;
     const [profiles,personalArtists,tracks,releases,likes,follows,playlists,playlistTracks,listens,publicArtists,playlistSaves,artistUpdates,savedReleases]=results.slice(0,13).map(r=>r.data||[]);
     const artists=[...publicArtists,...personalArtists.filter(a=>!publicArtists.some(p=>p.user_id===a.user_id))];
-    const admin=Boolean(results[13].data);setIsAdmin(admin);
+    const admin=Boolean(results[13].data);
     const errors=results.filter(r=>r.error);if(errors.length)notify('No se han podido cargar algunos datos: '+safeError(errors[0].error));
     let reports=[],updateReports=[];if(admin){
       const [r,ur]=await Promise.all([supabase.from('copyright_reports').select('*').limit(1000),supabase.from('artist_update_reports').select('*').limit(1000)]);
       reports=r.data||[];updateReports=ur.data||[];
     }
+    if(!fresh())return;
     const notificationResult=await supabase.from('notifications').select('id,user_id,event_type,title,message,related_id,created_at,read_at').order('created_at',{ascending:false}).limit(100);
+    if(!fresh())return;
     if(notificationResult.error)notify('No se han cargado los avisos: '+safeError(notificationResult.error));
-    setDatabase({profiles,artists,tracks,releases,likes,follows,playlists,playlistTracks,listens,reports,stats:results[14].data||[],followerCounts:results[15].data||[],notifications:notificationResult.data||[],playlistSaves,artistUpdates,updateReports,savedReleases});
     const {data:settings,error:settingsError}=await supabase.from('listening_settings')
       .select('country_code,analytics_enabled').eq('user_id',uid).maybeSingle();
+    if(!fresh())return;
+    // Aplicación atómica: nunca mostrar datos o permisos de una carga antigua.
+    setIsAdmin(admin);
+    setDatabase({profiles,artists,tracks,releases,likes,follows,playlists,playlistTracks,listens,reports,stats:results[14].data||[],followerCounts:results[15].data||[],notifications:notificationResult.data||[],playlistSaves,artistUpdates,updateReports,savedReleases});
     if(!settingsError){const actual=settings||{country_code:'ZZ',analytics_enabled:false};setAnalyticsSettings(actual);setDraftAnalyticsSettings(actual);}
-    setLoading(false);
     if(!deepLinkConsumed.current){
       const q=new URLSearchParams(location.search).get('playlist');
       const artistId=new URLSearchParams(location.search).get('artist');
@@ -507,7 +535,13 @@ export default function App(){
       }
       deepLinkConsumed.current=true;
     }
+    }catch(error){
+      if(fresh())notify('No se pudo sincronizar OVIO. Comprueba la conexión y vuelve a intentarlo.');
+    }finally{
+      if(fresh())setLoading(false);
+    }
   }
+
   useEffect(()=>{
     if(!session?.user?.id||!configured||!['home','charts'].includes(page))return;
     let active=true;
@@ -739,9 +773,14 @@ export default function App(){
   },[current?.id,playing, database.artists,database.profiles,database.releases]);
   recordListenRef.current=(trackId)=>recordListen(trackId);
   async function recordListen(id){
-    if(!uid)return;
-    const {error}=await supabase.from('listen_events').insert({user_id:uid,track_id:id});
-    if(!error)loadAll(uid); // A lo sumo una escucha contabilizada por día; nunca se usa para remunerar.
+    const accountId=activeAccountRef.current;
+    if(!accountId||!id)return;
+    const {error}=await supabase.from('listen_events').insert({user_id:accountId,track_id:id});
+    // No repetir ~16 consultas de catálogo cada vez que se escucha una canción.
+    // La restricción UNIQUE del servidor continúa decidiendo qué escucha es válida.
+    if(!error&&activeAccountRef.current===accountId){
+      setDatabase(previous=>({...previous,listens:appendListen(previous.listens,{user_id:accountId,track_id:id,created_at:new Date().toISOString()})}));
+    }
   }
   async function toggleSavedRelease(release){
     if(!uid||!release?.id)return;
@@ -1182,7 +1221,7 @@ export default function App(){
     <NavigationSidebar page={page} isAdmin={isAdmin} approvedArtist={approvedArtist}
       unreadCount={unreadCount} mobileMenu={mobileMenu} logo={<Logo/>}
       onNavigate={nav} onClose={()=>setMobileMenu(false)}/>
-    <div className="main-column"><header className="topbar"><div className="row"><button className="icon-button mobile-menu" ref={mobileMenuTrigger} type="button" onClick={()=>setMobileMenu(v=>!v)} aria-controls="ovio-sidebar" aria-expanded={mobileMenu} aria-label={mobileMenu?'Cerrar menú':'Abrir menú'}><Menu/></button><span className="top-greeting">La música se descubre juntos.</span></div><div className="row"><span className="beta-label">OVIO BETA · 1.7</span><button className="notification-bell" aria-label={`Notificaciones: ${unreadCount} sin leer`} title="Notificaciones" onClick={()=>nav('notifications')}>{unreadCount?<BellRing size={19}/>:<Bell size={19}/>} {unreadCount>0&&<span className="bell-count">{unreadCount>99?'99+':unreadCount}</span>}</button><button className="account-button" onClick={()=>nav('profile')}><Avatar profile={myProfile}/><span>{myProfile.display_name}</span><Settings size={16}/></button></div></header>
+    <div className="main-column"><header className="topbar"><div className="row"><button className="icon-button mobile-menu" ref={mobileMenuTrigger} type="button" onClick={()=>setMobileMenu(v=>!v)} aria-controls="ovio-sidebar" aria-expanded={mobileMenu} aria-label={mobileMenu?'Cerrar menú':'Abrir menú'}><Menu/></button><span className="top-greeting">La música se descubre juntos.</span></div><div className="row"><span className="beta-label">OVIO BETA · 1.9</span><button className="notification-bell" aria-label={`Notificaciones: ${unreadCount} sin leer`} title="Notificaciones" onClick={()=>nav('notifications')}>{unreadCount?<BellRing size={19}/>:<Bell size={19}/>} {unreadCount>0&&<span className="bell-count">{unreadCount>99?'99+':unreadCount}</span>}</button><button className="account-button" onClick={()=>nav('profile')}><Avatar profile={myProfile}/><span>{myProfile.display_name}</span><Settings size={16}/></button></div></header>
       <main className="main-content" id="contenido-principal" tabIndex="-1">{loading&&<div className="sync-note"><RefreshCcw size={14}/> Actualizando contenido...</div>}{body}</main>
     </div>
     <div className={'player '+(!current?'no-song':'')}>{current&&(playerError||offline||buffering)&&<div className={'player-health '+(playerError||offline?'has-error':'')} role="status"><span>{offline?<><WifiOff size={15}/> Sin conexión: el audio necesita internet.</>:playerError?<><AlertCircle size={15}/> {playerError}</>:<><RefreshCcw size={15} className="player-spin"/> Cargando audio…</>}</span>{(playerError||offline)&&<button className="button tiny secondary" onClick={retryPlayback} disabled={!canRetryPlayback(current,offline)}><RotateCw size={14}/> Reintentar</button>}</div>}<div className="now-playing">{current?<><button className="player-cover-button" aria-label="Abrir reproductor completo" onClick={()=>setModal({type:'player'})}><Cover compact title={current.title} n={1} coverPath={coverForTrack(current)}/></button><div><b>{current.title}</b><button onClick={()=>nav('artist',current.artist_id)}>{artistName(current.artist_id)}</button></div><button aria-label="Favorito" className={'icon-button '+(liked(current.id)?'on':'')} onClick={()=>toggleLike(current.id)}><Heart size={17} fill={liked(current.id)?'currentColor':'none'}/></button></>:<><span className="player-placeholder"><Music2 size={18}/></span><div><b>Nada reproduciéndose</b><small>Elige una canción</small></div></>}</div>

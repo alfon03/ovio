@@ -1,17 +1,10 @@
-# OVIO — Beta v1.8
+# OVIO Beta v1.9
 
-Plataforma independiente de música hecha con React, Vite y Supabase, publicada en Vercel.
+Streaming social para artistas independientes (beta sin monetización). Proyecto React/Vite conectado al Supabase existente y desplegable en Vercel.
 
-## Qué cambia en v1.8
+## Instalar
 
-- **Explorar renovado**: estrenos recientes, géneros con canciones reales, sugerencias, joyas ocultas, artistas seguidos y búsqueda en el catálogo.
-- **Reproductor más resistente**: estados de conexión y carga, reintento manual si falla una fuente, y controles del sistema operativo mediante Media Session cuando están disponibles.
-- **Responsive**: interfaz de exploración adaptada a móvil y PWA.
-- **Respeta la privacidad**: no cambia políticas RLS, no comparte borradores de letras, no incorpora estadísticas sin consentimiento y no guarda audios offline.
-
-## Instalación y pruebas
-
-Consulta [INSTALAR-V18.md](./INSTALAR-V18.md) y [PRUEBAS-V18.md](./PRUEBAS-V18.md). Esta versión es compatible con OVIO v1.7 y **no necesita SQL**.
+Lee [INSTALAR-V19.md](INSTALAR-V19.md) para integrar la actualización sobre tu repositorio.
 
 ```bash
 npm ci
@@ -20,8 +13,8 @@ npm run check:deploy
 npm run build
 ```
 
-Para `check:deploy` son necesarias tus variables públicas de Supabase en `.env.local` (o el entorno). **Nunca subas** ese archivo ni claves secretas al repositorio.
+**Sin SQL nuevo:** mantiene las migraciones instaladas hasta la 013, incluida la privacidad de letras.
 
-## Estado de validación
+Consulta [CHANGELOG-V19.md](CHANGELOG-V19.md) y [PRUEBAS-V19.md](PRUEBAS-V19.md) para ver los cambios y las verificaciones antes de publicar.
 
-Las pruebas unitarias y la comprobación de sintaxis JS/JSX se han ejecutado en este entorno. No se ha podido completar `npm run build` aquí porque `npm ci` no consiguió descargar las dependencias desde npm. Ejecuta la compilación local antes de enviar el proyecto a Vercel; la integración con Supabase y la reproducción real también deben verificarse en tus dispositivos.
+No compartas ni subas claves secretas, contraseñas ni archivos `.env.local`.
