@@ -1,21 +1,12 @@
-# OVIO Beta v1.3 — lista para preparar el despliegue
+# OVIO Beta v1.4 · Piloto con feedback
 
-## En local
+Proyecto React + Supabase + Vercel. **No crear otra base de datos**.
 
-```bash
-npm install
-npm test
-npm run check:deploy
-npm run build
-npm run dev
-```
+Para actualizar desde v1.3, empieza por **[INSTALAR-V14.md](INSTALAR-V14.md)**.
 
-La aplicación requiere `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`, tal como en `.env.example`. Nunca publiques `.env`.
+- SQL nuevo: `sql/011_feedback_beta.sql` (ejecútalo una sola vez tras las migraciones anteriores).
+- Nueva pantalla para oyentes **Ayuda y sugerencias** y bandeja **Comentarios beta** para administradores.
+- Privacidad protegida por políticas RLS de Supabase y límite de cinco mensajes/hora.
+- Para pruebas de aceptación utiliza `PRUEBAS-V14.md`.
 
-## Publicar
-
-Sigue **[DEPLOY-BETA-V13.md](DEPLOY-BETA-V13.md)** para Vercel, protección de la beta y Supabase Auth. **No requiere SQL nuevo**. Los datos existentes se mantienen.
-
-## Importante
-
-Publicar un sitio no significa que esté listo para aceptar usuarios reales. La beta debe seguir protegida mientras se revisan permisos, legalidad de la música, textos de privacidad, denuncias y la marca comercial OVIO.
+**Aún no está probada con tu Supabase real y no equivale a una beta legalmente lista para el público**.

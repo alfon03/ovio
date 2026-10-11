@@ -229,3 +229,30 @@ label{display:flex;flex-direction:column;gap:8px;font-size:12px;color:#cecede;fo
 .auth-security-hint{margin:-1px 0 4px!important;line-height:1.5;color:#b7b1cb!important}
 .auth-panel .check-label{display:flex;align-items:center;gap:10px;font-size:13px}
 .auth-panel input[type="checkbox"]{width:auto;flex:none}
+
+
+/* OVIO Beta v1.4 · bandeja de feedback accesible y responsive */
+.ovio-beta-support{max-width:1030px;margin:0 auto;padding-bottom:28px}
+.ovio-beta-support .section-heading{margin:0 0 25px}.beta-feedback-form{padding:25px;margin-bottom:27px;border-radius:16px}
+.beta-feedback-form label,.beta-feedback-admin-controls label{display:flex;flex-direction:column;gap:7px;color:#e6dff4;font-size:13px}
+.beta-feedback-form input,.beta-feedback-form select,.beta-feedback-form textarea,
+.beta-feedback-admin-controls select,.beta-feedback-admin-controls textarea,
+.beta-feedback-filter select{background:#15141f;color:#f5f2ff;border:1px solid #4c4264;border-radius:10px;padding:11px;font:inherit;min-width:0;width:100%}
+.beta-feedback-form textarea,.beta-feedback-admin-controls textarea{resize:vertical;line-height:1.5}
+.beta-feedback-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.beta-feedback-error,.beta-feedback-success{padding:12px 15px;border-radius:10px;margin:10px 0 16px;font-size:13px}
+.beta-feedback-error{background:#401e2b;color:#ffdce0;border:1px solid #824252}
+.beta-feedback-success{background:#173e36;color:#c4ffdf;border:1px solid #35725c}
+.beta-feedback-history{border-radius:16px;padding:25px}
+.beta-feedback-history-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 13px}
+.beta-feedback-history h3{margin:0}.beta-feedback-filter{display:flex;align-items:center;gap:9px;font-size:12px;color:#b8aacc}
+.beta-feedback-filter select{min-width:140px;width:auto}.beta-feedback-item{padding:18px 0;border-top:1px solid #ffffff18}
+.beta-feedback-item-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.beta-feedback-item-head b{overflow-wrap:anywhere;font-size:15px}.beta-feedback-meta{margin:8px 0;color:#b7aeca;font-size:11px}
+.beta-feedback-details{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;font-size:13px;line-height:1.55;color:#e0d8e9}
+.beta-feedback-response{display:flex;align-items:flex-start;gap:9px;background:#29213c;border-radius:12px;padding:11px;color:#e8e0ff;font-size:12px;margin-top:13px}
+.beta-feedback-response p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.beta-feedback-empty{display:flex;flex-direction:column;align-items:center;gap:9px;color:#b5aac5;padding:35px 10px}
+.beta-feedback-admin-controls{margin-top:15px;padding:14px;background:#201c2b;border-radius:12px}.beta-feedback-admin-controls .button{align-self:flex-start}
+.beta-status{border-radius:999px;padding:4px 10px;background:#41375c;color:#e9dbff;font-size:11px;white-space:nowrap}
+.beta-status-resolved{background:#1e4e43;color:#ceffeb}.beta-status-dismissed{background:#343342;color:#d8d6e1}.beta-status-reviewing{background:#604324;color:#ffe0ad}
+@media(max-width:700px){.beta-feedback-grid{grid-template-columns:1fr}.beta-feedback-form,.beta-feedback-history{padding:17px}.beta-feedback-history-head{align-items:flex-start;flex-direction:column}.beta-feedback-filter select{min-width:130px}}
