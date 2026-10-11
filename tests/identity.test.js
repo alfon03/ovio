@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {normalizeUsername,validateUsername,normalizeArtistName,validateArtistName,validateEmail} from '../src/identity.js';
+test('username conserva minúsculas y recorta espacios',()=>assert.equal(normalizeUsername('  Luna_Beats  '),'luna_beats'));
+test('username permite letras, números y _ con letra inicial',()=>assert.equal(validateUsername('luna_22'),''));
+test('username rechaza espacios, guiones y caracteres especiales',()=>{for(const n of ['a','a b','uno-dos','_abcd','ááá','aaaaaaaaaaaaaaaaaaaaaaaaa'])assert.notEqual(validateUsername(n),'')});
+test('identificadores reservados',()=>assert.notEqual(validateUsername('support'),''));
+test('artista comprime espacios sin cambiar acentos',()=>assert.equal(normalizeArtistName('  Luna   Beats '),'Luna Beats'));
+test('artista comprueba longitud',()=>{assert.equal(validateArtistName('La Oreja'), '');assert.notEqual(validateArtistName('x'),'')});
+test('email formato razonable',()=>{assert.equal(validateEmail('usuario@ejemplo.com'),'');assert.notEqual(validateEmail('usuario@ejemplo'),'');assert.notEqual(validateEmail('sin arroba'),'')});

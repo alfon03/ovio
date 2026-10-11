@@ -1,0 +1,8 @@
+- `@Luna_Music` y `@luna_music`: el segundo debe estar ocupado.
+- Dos registros que intentan el mismo username simultáneamente: solo uno debe tener éxito.
+- Dos solicitudes de artista «Luna Beats» y «luna   beats»: solo una pendiente/aprobada.
+- Un artista rechazado libera el nombre; uno aprobado lo mantiene reservado.
+- Perfil de un usuario anterior: muestra `@u_<uuid>` y permite cambiarlo sin perder playlists.
+- Usuario sin verificar email: no obtiene sesión al iniciar sesión (con Confirm Email activo).
+- Usuario confirmado: sí puede entrar, guardar playlist y solicitar artista.
+- Una cuenta no puede modificar perfiles ni solicitudes ajenas (prueba RLS).
