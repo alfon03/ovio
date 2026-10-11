@@ -13,6 +13,7 @@ import { listenedDelta } from './analytics';
 import ArtistInsights from './ArtistInsights';
 import BetaSupport from './BetaSupport';
 import LyricDrafts from './LyricDrafts';
+import NavigationSidebar from './NavigationSidebar';
 import BetaPilotDashboard, {BetaWelcome} from './BetaPilot';
 import {createQueue, nextPosition, toggleShuffle, cycleRepeat, enqueueNext, removeUpcoming, moveUpcoming, resumePosition} from './player-queue';
 import { normalizeUsername, validateUsername, normalizeArtistName, validateArtistName, validateEmail } from './identity';
@@ -209,13 +210,6 @@ function PasswordReset({session,onDone,onCancel}){
     </div></div></main>;
 }
 
-const navs = [
-  ['home','Inicio',Home],['search','Buscar',Search],['explore','Descubrir',Compass],
-  ['library','Tu biblioteca',Library],['community','Comunidad',Users],
-  ['charts','Top OVIO',Trophy],['recap','Mi año en OVIO',CalendarDays],
-  ['pilot-start','Primeros pasos',ClipboardCheck],
-  ['feedback','Ayuda y sugerencias',MessageSquare]
-];
 function SectionHeading({title,detail='',button}) {return <div className="section-heading"><div><h2>{title}</h2>{detail&&<p className="subtext">{detail}</p>}</div>{button}</div>}
 function Blank({icon:Icon=Music2,title,description,button}){return <div className="blank"><Icon size={28}/><h3>{title}</h3><p>{description}</p>{button}</div>}
 
@@ -246,6 +240,29 @@ export default function App(){
   const [bookmarks,setBookmarks] = useState([]);
   const [bookmarkLoading,setBookmarkLoading] = useState(false);
   const [mobileMenu,setMobileMenu] = useState(false);
+  const mobileMenuTrigger=useRef(null);
+  useEffect(()=>{
+    if(!mobileMenu)return;
+    const closeOnEscape=(event)=>{
+      if(event.key==='Escape'){
+        setMobileMenu(false);
+        mobileMenuTrigger.current?.focus();
+      }
+    };
+    const oldOverflow=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    document.addEventListener('keydown',closeOnEscape);
+    return ()=>{
+      document.body.style.overflow=oldOverflow;
+      document.removeEventListener('keydown',closeOnEscape);
+    };
+  },[mobileMenu]);
+  useEffect(()=>{
+    const desktop=window.matchMedia('(min-width: 981px)');
+    const resetMenu=()=>{if(desktop.matches)setMobileMenu(false);};
+    desktop.addEventListener('change',resetMenu);
+    return ()=>desktop.removeEventListener('change',resetMenu);
+  },[]);
   const [installPrompt,setInstallPrompt] = useState(null);
   useEffect(()=>{
     const available=event=>{event.preventDefault();setInstallPrompt(event);};
@@ -1095,9 +1112,12 @@ export default function App(){
     </>:<Blank icon={LockKeyhole} title="No tienes permiso de administrador" description="Este panel requiere autorización en la base de datos."/>;
   }
   return <div className="app-shell">
-    <aside className={'sidebar '+(mobileMenu?'open':'')}><div className="sidebar-top"><Logo/><button className="icon-button mobile-close" onClick={()=>setMobileMenu(false)}><X/></button></div><div className="sidebar-label">EXPLORAR</div><nav aria-label="Menú principal">{navs.map(([id,label,Icon])=><button key={id} className={'side-link '+(page===id?'active':'')} onClick={()=>nav(id)}><Icon size={19}/>{label}</button>)}</nav><div className="sidebar-label">CREADORES</div><nav><button className={'side-link '+(page==='studio'?'active':'')} onClick={()=>nav('studio')}><AudioLines size={19}/> OVIO Studio</button>{approvedArtist&&<button className={'side-link '+(page==='lyric-drafts'?'active':'')} onClick={()=>nav('lyric-drafts')}><FileText size={19}/> Mis letras privadas</button>}{approvedArtist&&<button className={'side-link '+(page==='insights'?'active':'')} onClick={()=>nav('insights')}><TrendingUp size={19}/> Mis estadísticas</button>}<button className={'side-link '+(page==='notifications'?'active':'')} onClick={()=>nav('notifications')}><Bell size={19}/> Notificaciones {unreadCount>0&&<span className="side-counter">{unreadCount>99?'99+':unreadCount}</span>}</button>{isAdmin&&<button className={'side-link '+(page==='admin'?'active':'')} onClick={()=>nav('admin')}><ShieldCheck size={19}/> Moderación</button>}{isAdmin&&<button className={'side-link '+(page==='feedback-admin'?'active':'')} onClick={()=>nav('feedback-admin')}><MessageSquare size={19}/> Comentarios beta</button>}{isAdmin&&<button className={'side-link '+(page==='pilot-admin'?'active':'')} onClick={()=>nav('pilot-admin')}><ClipboardCheck size={19}/> Panel del piloto</button>}</nav><div className="sidebar-bottom"><div className="sidebar-promo"><Disc3 color="#a993ff"/><b>Tu próxima canción favorita está aquí.</b><p>Descubre nuevos talentos.</p><button className="button tiny secondary" onClick={()=>nav('explore')}>Descubrir</button></div><span className="sidebar-legal">Beta gratuita · Música revisada</span></div></aside>
-    <div className="main-column"><header className="topbar"><div className="row"><button className="icon-button mobile-menu" onClick={()=>setMobileMenu(v=>!v)} aria-label="Abrir menú"><Menu/></button><span className="top-greeting">La música se descubre juntos.</span></div><div className="row"><span className="beta-label">OVIO BETA · 1.6</span><button className="notification-bell" aria-label={`Notificaciones: ${unreadCount} sin leer`} title="Notificaciones" onClick={()=>nav('notifications')}>{unreadCount?<BellRing size={19}/>:<Bell size={19}/>} {unreadCount>0&&<span className="bell-count">{unreadCount>99?'99+':unreadCount}</span>}</button><button className="account-button" onClick={()=>nav('profile')}><Avatar profile={myProfile}/><span>{myProfile.display_name}</span><Settings size={16}/></button></div></header>
-      <main className="main-content">{loading&&<div className="sync-note"><RefreshCcw size={14}/> Actualizando contenido...</div>}{body}</main>
+    <a className="skip-to-content" href="#contenido-principal">Ir al contenido principal</a>
+    <NavigationSidebar page={page} isAdmin={isAdmin} approvedArtist={approvedArtist}
+      unreadCount={unreadCount} mobileMenu={mobileMenu} logo={<Logo/>}
+      onNavigate={nav} onClose={()=>setMobileMenu(false)}/>
+    <div className="main-column"><header className="topbar"><div className="row"><button className="icon-button mobile-menu" ref={mobileMenuTrigger} type="button" onClick={()=>setMobileMenu(v=>!v)} aria-controls="ovio-sidebar" aria-expanded={mobileMenu} aria-label={mobileMenu?'Cerrar menú':'Abrir menú'}><Menu/></button><span className="top-greeting">La música se descubre juntos.</span></div><div className="row"><span className="beta-label">OVIO BETA · 1.7</span><button className="notification-bell" aria-label={`Notificaciones: ${unreadCount} sin leer`} title="Notificaciones" onClick={()=>nav('notifications')}>{unreadCount?<BellRing size={19}/>:<Bell size={19}/>} {unreadCount>0&&<span className="bell-count">{unreadCount>99?'99+':unreadCount}</span>}</button><button className="account-button" onClick={()=>nav('profile')}><Avatar profile={myProfile}/><span>{myProfile.display_name}</span><Settings size={16}/></button></div></header>
+      <main className="main-content" id="contenido-principal" tabIndex="-1">{loading&&<div className="sync-note"><RefreshCcw size={14}/> Actualizando contenido...</div>}{body}</main>
     </div>
     <div className={'player '+(!current?'no-song':'')}><div className="now-playing">{current?<><button className="player-cover-button" aria-label="Abrir reproductor completo" onClick={()=>setModal({type:'player'})}><Cover compact title={current.title} n={1} coverPath={coverForTrack(current)}/></button><div><b>{current.title}</b><button onClick={()=>nav('artist',current.artist_id)}>{artistName(current.artist_id)}</button></div><button aria-label="Favorito" className={'icon-button '+(liked(current.id)?'on':'')} onClick={()=>toggleLike(current.id)}><Heart size={17} fill={liked(current.id)?'currentColor':'none'}/></button></>:<><span className="player-placeholder"><Music2 size={18}/></span><div><b>Nada reproduciéndose</b><small>Elige una canción</small></div></>}</div>
       <div className="player-center"><div className="transport"><button title="Aleatorio" aria-label={queueState.shuffle?'Desactivar aleatorio':'Activar aleatorio'} aria-pressed={queueState.shuffle} className={'mode-control '+(queueState.shuffle?'active':'')} onClick={()=>setPlayerQueue(toggleShuffle(queueRef.current))}><Shuffle size={17}/></button><button aria-label="Anterior" onClick={()=>nextTrack(true)} disabled={!current}><SkipBack size={19}/></button><button className="play-round" aria-label={playing?'Pausar':'Reproducir'} onClick={()=>{const a=audioRef.current;if(!current)return;if(a.paused)a.play().catch(()=>notify('No se pudo reproducir.'));else a.pause()}} disabled={!current}>{playing?<Pause size={19} fill="currentColor"/>:<Play size={19} fill="currentColor"/>}</button><button aria-label="Siguiente" onClick={()=>nextTrack()} disabled={!current}><SkipForward size={19}/></button><button title="Repetir" aria-label={`Modo repetir: ${queueState.repeat}`} className={'mode-control '+(queueState.repeat!=='off'?'active':'')} onClick={()=>setPlayerQueue(cycleRepeat(queueRef.current))}>{queueState.repeat==='one'?<Repeat1 size={17}/>:<Repeat size={17}/>}</button></div><div className="progress"><small>{formatTime(elapsed)}</small><input aria-label="Posición de reproducción" type="range" min="0" max={duration||1} step="1" value={Math.min(elapsed,duration||1)} disabled={!current} onChange={e=>{audioRef.current.currentTime=Number(e.target.value);setElapsed(Number(e.target.value))}}/><small>{formatTime(duration)}</small></div></div>

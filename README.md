@@ -1,22 +1,35 @@
-# OVIO — Beta v1.6
+# OVIO — Beta v1.7
 
-OVIO es una plataforma de descubrimiento musical para artistas independientes, creada con **React + Vite + Supabase** y preparada para desplegarse en **Vercel**.
+Plataforma musical independiente desarrollada con React, Vite y Supabase y desplegable en Vercel.
 
-## Novedades
+## Nuevas mejoras de v1.7
 
-- Solucionado el error de Vite de `BetaSupport.jsx` en la v1.5.
-- **Creadores → Mis letras privadas**: editor de borradores para artistas aprobados, almacenados en Supabase con RLS por propietario, sin publicación pública.
-- **PWA instalable** y favicon/iconos para navegadores, Android e iOS, usando la marca OVIO existente.
-- Mantiene reproducción, playlists, perfiles, moderación, recuperación de cuentas, soporte de la beta y panel del piloto.
+- **Menú Explorar desplegable**, abierto por defecto. Incluye Inicio, Buscar, Descubrir, Biblioteca, Comunidad, Top OVIO, Recap, primeros pasos y ayuda.
+- **Menú Creadores desplegable**, con OVIO Studio, letras privadas y estadísticas (solo para artistas aprobados) y notificaciones.
+- **Menú Moderación separado y desplegable** para administradores, con revisión de contenido, comentarios beta y panel del piloto.
+- Menú lateral **desplazable** para que no se corten opciones en pantallas pequeñas.
+- Diseño adaptado a tabletas y teléfonos: panel lateral con apertura/cierre, fondo oscurecido, tecla Escape, tamaños táctiles y áreas seguras de iPhone.
+- Estados accesibles (`aria-expanded`, `aria-current`, foco) y soporte para movimiento reducido.
+- Se conservan el reproductor, los borradores privados de letras, las funciones PWA, registro, analíticas, listas y moderación.
 
-## Instalación y actualización
+## Actualización desde v1.6
 
-1. Lee **[`INSTALAR-V16.md`](./INSTALAR-V16.md)** antes de cambiar los archivos.
-2. Ejecuta en tu Supabase EXISTENTE `sql/013_lyrics_private.sql` tras las migraciones anteriores.
-3. Mantén `.env.local` solo en tu PC (consulta `.env.example`); en Vercel usa las variables Config del proyecto.
-4. Ejecuta `npm ci`, `npm test`, `npm run check:deploy`, `npm run build` y despliega si terminan correctamente.
-5. Comprueba privacidad real con **dos cuentas distintas** siguiendo `PRUEBAS-V16.md`.
+Lee [INSTALAR-V17.md](./INSTALAR-V17.md) y sigue las pruebas de [PRUEBAS-V17.md](./PRUEBAS-V17.md).
 
-No se incluyen `node_modules`, el historial Git, archivos generados `dist`, ni archivos `.env.local` con datos de conexión. No se introducen pagos, publicidad ni publicación automática de letras. La edición de letras y reproducción requieren conexión; el service worker no guarda datos privados.
+**Esta versión no necesita nuevas migraciones SQL**. Se instala en la misma aplicación de Vercel y con el mismo proyecto Supabase.
 
-**Nota:** no se pudo ejecutar un build Vite completo en el entorno de preparación por falta de acceso a npm. La prueba definitiva de compilación se realiza en tu ordenador o en Vercel.
+```bash
+npm ci
+npm test
+npm run check:deploy
+npm run build
+```
+
+`check:deploy` requiere variables VITE_ válidas en el entorno local. Conservar tu `.env.local` actual; no distribuirlo ni guardarlo en Git. Nunca usar claves secretas o `service_role` en el frontend.
+
+## Estado
+
+- 71 pruebas unitarias completadas correctamente.
+- Sintaxis JS/JSX validada.
+- La compilación Vite de producción debe completarse en el ordenador o Vercel: este entorno no puede acceder al registro de paquetes npm.
+- No se han probado sesiones reales con tu Supabase desde este entorno.
